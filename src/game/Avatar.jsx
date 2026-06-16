@@ -1,8 +1,11 @@
 /**
  * Avatar — the explorable character for play mode. Drops in from the sky on
- * start, then walks on the terrain via WASD / arrows with a follow camera. Its
- * position lives in the gameStore (`avatarPos`) so Discoverables can measure
- * proximity. While playing, this owns the camera (ExploreControls is unmounted).
+ * start, walks on the terrain via WASD / arrows (follow camera), and JUMPS with
+ * Space. The selected model comes from the gameStore (avatarVariant) and the
+ * roster in avatarConfig. Animation clips are matched by NAME (idle/walk/run/
+ * jump) because clip names differ per model; some models have no clips at all
+ * (they just slide / hop). Position lives in gameStore (avatarPos) so
+ * Discoverables can measure proximity.
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -11,18 +14,34 @@ import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.j
 import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
+import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 
-// Selectable player models. `idle`/`walk` are animation-clip indices (Mixamo
-// names are cryptic); chicken has no animations (static).
-const AVATAR_MODELS = {
-  robot: { url: "/models/chibi_robot.glb", target: 0.7, rotX: 0, idle: 0, walk: 1 },
-  chicken: { url: "/models/chicken.glb", target: 0.95, rotX: 0, idle: 0, walk: 1 },
-};
-useGLTF.preload(AVATAR_MODELS.robot.url);
-useGLTF.preload(AVATAR_MODELS.chicken.url);
+AVATARS.forEach((a) => useGLTF.preload(a.url));
 
 const SPEED = 11;
 const SPAWN = new THREE.Vector3(0, 42, 16);
+const JUMP_DUR = 0.66; // seconds
+const JUMP_H = 1.7; // peak height (world units)
+
+/**
+ * Pick the best-matching clip name. `includes` is tried in priority order;
+ * a clip whose LAST "|"-segment equals the token wins first, then any substring
+ * match, skipping anything containing an `excludes` token. Returns null if none.
+ */
+function pickClip(names, includes, excludes = []) {
+  if (!names || !names.length) return null;
+  const rows = names.map((n) => ({ n, l: n.toLowerCase(), last: n.toLowerCase().split("|").pop() }));
+  const blocked = (l) => excludes.some((e) => l.includes(e));
+  for (const inc of includes) {
+    const seg = rows.find((r) => r.last === inc && !blocked(r.l));
+    if (seg) return seg.n;
+  }
+  for (const inc of includes) {
+    const hit = rows.find((r) => r.l.includes(inc) && !blocked(r.l));
+    if (hit) return hit.n;
+  }
+  return null;
+}
 
 export function Avatar() {
   const { camera, gl } = useThree();
@@ -33,11 +52,11 @@ export function Avatar() {
   const tmpFwd = useRef(new THREE.Vector3());
   const tmpRight = useRef(new THREE.Vector3());
   const tmpMove = useRef(new THREE.Vector3());
-  const tmpCam = useRef(new THREE.Vector3());
   const tmpTarget = useRef(new THREE.Vector3());
-  // Orbit camera (drag to look 360° around the avatar). Drag sets the *target*
-  // angles; the live angles ease toward them each frame for OrbitControls-style
-  // damped, inertial motion.
+  // jump state
+  const jumping = useRef(false);
+  const jumpT = useRef(0);
+  // Orbit follow camera (drag to look, wheel to zoom) — damped toward targets.
   const yaw = useRef(0);
   const pitch = useRef(0.38);
   const dist = useRef(8.5);
@@ -46,23 +65,36 @@ export function Avatar() {
   const distT = useRef(8.5);
   const drag = useRef(false);
   const last = useRef({ x: 0, y: 0 });
-  const { playing, avatarVariant } = useGame();
-  const cfg = AVATAR_MODELS[avatarVariant] || AVATAR_MODELS.robot;
 
-  // Player model + (optional) Mixamo animations.
+  const { playing, avatarVariant } = useGame();
+  const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
+
   const { scene, animations } = useGLTF(cfg.url);
-  const robotRef = useRef();
-  const { actions, names } = useAnimations(animations, robotRef);
+  const rigRef = useRef();
+  const { actions, names } = useAnimations(animations, rigRef);
   const curAction = useRef(null);
-  const forced = useRef(null); // debug: 1-4 keys force a clip to find the walk
-  const robot = useMemo(() => {
+
+  // Resolve the clip names for this model.
+  const clips = useMemo(
+    () => ({
+      idle: pickClip(names, ["idle"], ["idle_", "idle."]),
+      walk: pickClip(names, ["walk"], ["walk_hold", "walk."]),
+      run: pickClip(names, ["run", "sprint"], ["run_", "run."]),
+      jump: pickClip(names, ["jump_start", "jump"], ["jump_idle", "jump_land", "jump_loop"]),
+    }),
+    [names],
+  );
+
+  // Build the model: recenter feet to y=0, centered in x/z, scaled to target.
+  const rig = useMemo(() => {
     const obj = skeletonClone(scene);
-    obj.rotation.set(cfg.rotX, 0, 0);
+    obj.rotation.set(0, 0, 0);
     obj.updateWorldMatrix(true, true);
     const box = new THREE.Box3();
     const tmp = new THREE.Box3();
     obj.traverse((o) => {
       if (o.isMesh) {
+        o.castShadow = true;
         if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
         tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
         box.union(tmp);
@@ -70,28 +102,40 @@ export function Avatar() {
     });
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    obj.position.set(-center.x, -box.min.y, -center.z); // feet on the ground, centered
+    obj.position.set(-center.x, -box.min.y, -center.z);
     const scale = cfg.target / Math.max(size.x, size.y, size.z, 0.001);
     return { obj, scale };
   }, [scene, cfg]);
 
-  // Start on the idle clip once playing.
+  // Play idle once playing / model ready.
   useEffect(() => {
-    if (!playing || !names || !names.length) return;
-    const idle = actions[names[cfg.idle]] || actions[names[0]];
-    if (idle) {
-      idle.reset().play();
-      curAction.current = idle.getClip().name;
+    if (!playing || !actions) return;
+    const start = clips.idle || clips.walk || (names && names[0]);
+    const a = start && actions[start];
+    if (a) {
+      a.reset().fadeIn(0.2).play();
+      curAction.current = start;
     }
-    return () => Object.values(actions).forEach((a) => a && a.stop());
-  }, [actions, names, playing, cfg]);
+    return () => Object.values(actions).forEach((x) => x && x.stop());
+  }, [actions, clips, names, playing]);
 
+  // Spawn + key handlers (Space = jump).
   useEffect(() => {
     if (!playing) return;
     avatarPos.copy(SPAWN);
     dropping.current = true;
+    jumping.current = false;
     setLanded(false);
-    const down = (e) => { keys.current[e.code] = true; };
+    const down = (e) => {
+      keys.current[e.code] = true;
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (!dropping.current && !jumping.current) {
+          jumping.current = true;
+          jumpT.current = 0;
+        }
+      }
+    };
     const up = (e) => { keys.current[e.code] = false; };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -101,7 +145,7 @@ export function Avatar() {
     };
   }, [playing]);
 
-  // Drag-to-orbit + wheel-to-zoom around the avatar.
+  // Drag-to-orbit + wheel-zoom.
   useEffect(() => {
     if (!playing) return;
     const el = gl.domElement;
@@ -116,7 +160,6 @@ export function Avatar() {
     };
     const onUp = () => { drag.current = false; };
     const onWheel = (e) => {
-      // multiplicative zoom: quick to pull back for a map overview, precise up close
       distT.current = Math.min(90, Math.max(3.5, distT.current * (1 + e.deltaY * 0.002)));
     };
     el.addEventListener("pointerdown", onDown);
@@ -138,7 +181,6 @@ export function Avatar() {
     let moved = false;
 
     if (dropping.current) {
-      // ease down to the ground, then land
       avatarPos.y += (groundY - avatarPos.y) * Math.min(1, d * 3.2);
       if (avatarPos.y <= groundY + 0.06) {
         avatarPos.y = groundY;
@@ -164,44 +206,43 @@ export function Avatar() {
         avatarPos.z += move.z;
         ref.current.rotation.y = Math.atan2(move.x, move.z);
       }
-      avatarPos.y = terrainHeight(avatarPos.x, avatarPos.z);
+      // grounded height + jump arc on top
+      let y = terrainHeight(avatarPos.x, avatarPos.z);
+      if (jumping.current) {
+        jumpT.current += d;
+        const t = jumpT.current / JUMP_DUR;
+        if (t >= 1) {
+          jumping.current = false;
+        } else {
+          y += JUMP_H * 4 * t * (1 - t); // parabola, peak at t=0.5
+        }
+      }
+      avatarPos.y = y;
     }
     ref.current.position.copy(avatarPos);
 
-    // walk clip while moving; idle clip frozen (timescale 0) while standing still
-    if (actions && names && names.length) {
-      // DEBUG: press 1-4 to lock a clip and preview it (find the real walk).
-      ["Digit1", "Digit2", "Digit3", "Digit4"].forEach((code, i) => {
-        if (keys.current[code] && i < names.length) forced.current = i;
-      });
-      const idleName = names[cfg.idle] || names[0];
-      const walkName = names[cfg.walk] || names[0];
-      const want =
-        forced.current != null
-          ? names[forced.current] || names[0]
-          : moved
-            ? walkName
-            : idleName;
-      if (want !== curAction.current) {
-        actions[curAction.current]?.fadeOut(0.18);
+    // animation state machine: jump > walk/run > idle
+    if (actions) {
+      let want;
+      if (jumping.current && clips.jump) want = clips.jump;
+      else if (moved) want = clips.walk || clips.run;
+      else want = clips.idle;
+      if (want && want !== curAction.current) {
+        if (curAction.current && actions[curAction.current]) actions[curAction.current].fadeOut(0.15);
         const nx = actions[want];
         if (nx) {
           nx.reset();
           nx.setEffectiveWeight(1);
           nx.setEffectiveTimeScale(1);
-          nx.fadeIn(0.18).play();
+          nx.fadeIn(0.15).play();
         }
         curAction.current = want;
-        if (forced.current != null) console.log("[avatar] clip", forced.current, "→", want);
       }
-      // hold the idle pose without looping; the walk clip always animates
-      const idleAct = actions[idleName];
-      if (idleAct) idleAct.setEffectiveTimeScale(moved || forced.current != null ? 1 : 0);
     }
 
-    // orbit follow camera: ease the live yaw/pitch/distance toward their drag
-    // targets (damped inertia), then place the camera on that sphere around the
-    // avatar and look at its head.
+    // damped orbit follow camera. Track the GROUND height (not the jump arc) so a
+    // jump visibly lifts the avatar instead of moving the whole frame with it.
+    const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
     const ease = Math.min(1, d * 12);
     yaw.current += (yawT.current - yaw.current) * ease;
     pitch.current += (pitchT.current - pitch.current) * ease;
@@ -210,10 +251,10 @@ export function Avatar() {
     const r = dist.current;
     camera.position.set(
       avatarPos.x + Math.sin(yaw.current) * Math.cos(cp) * r,
-      avatarPos.y + Math.sin(cp) * r + 1.0,
+      camBaseY + Math.sin(cp) * r + 1.0,
       avatarPos.z + Math.cos(yaw.current) * Math.cos(cp) * r,
     );
-    const target = tmpTarget.current.set(avatarPos.x, avatarPos.y + 1.1, avatarPos.z);
+    const target = tmpTarget.current.set(avatarPos.x, camBaseY + 1.1, avatarPos.z);
     camera.lookAt(target);
 
     guideTimer.current += d;
@@ -226,8 +267,8 @@ export function Avatar() {
   if (!playing) return null;
   return (
     <group ref={ref}>
-      <group ref={robotRef} scale={robot.scale}>
-        <primitive object={robot.obj} />
+      <group ref={rigRef} scale={rig.scale}>
+        <primitive object={rig.obj} />
       </group>
     </group>
   );

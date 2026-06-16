@@ -61,6 +61,7 @@ const Scene3D = lazy(() => import("./scene3d/Scene3D").then((m) => ({ default: m
 import { PlayButton } from "./game/PlayButton";
 import { RevealCard } from "./game/RevealCard";
 import { WelcomeCard, ContextHint } from "./game/PlayHints";
+import { AvatarSwitcher } from "./game/AvatarSwitcher";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3399,6 +3400,7 @@ export default function App() {
             </div>
           )}
           {scene3D && introComplete && <PlayButton visible={scene3D && introComplete} />}
+          {scene3D && introComplete && <AvatarSwitcher visible={scene3D && introComplete} />}
           {scene3D && introComplete && <WelcomeCard />}
           {scene3D && introComplete && <ContextHint />}
           <RevealCard />

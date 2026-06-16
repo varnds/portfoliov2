@@ -12,6 +12,7 @@
  */
 import { useSyncExternalStore } from "react";
 import * as THREE from "three";
+import { DEFAULT_AVATAR } from "./avatarConfig";
 
 // ── Non-reactive shared state ────────────────────────────────────────────────
 export const avatarPos = new THREE.Vector3(0, 0, 0);
@@ -36,7 +37,7 @@ let state = {
   guideTargetId: null, // nearest undiscovered id (for the bird guide)
   welcomeSeen: false, // welcome card dismissed
   nearTarget: null, // { id, buried } — the discoverable you're standing by
-  avatarVariant: "robot", // "robot" | "chicken"
+  avatarVariant: DEFAULT_AVATAR, // one of the ids in avatarConfig AVATARS
 };
 
 const listeners = new Set();
