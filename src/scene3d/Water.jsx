@@ -189,6 +189,33 @@ function buildSunGlitterTexture() {
 // ─── geometry builders ────────────────────────────────────────────────────────
 
 /**
+ * Local Y for a water-surface vertex.
+ *
+ * The water is a FLAT plane at WATER_Y. The terrain basin that hides its edges
+ * (so the pool nestles in a depression instead of floating) is carved in
+ * coords.js gated by an "origin guard" that SUPPRESSES the carve within ~r17 of
+ * the world origin, to keep the clothesline yard level. The pond centre sits at
+ * r≈22, but its rim reaching toward the yard dips into that guard zone — so
+ * there the basin is NOT carved and the flat water plane floats on un-carved
+ * sand, reading as a stray rippling "lake" patch away from the main pool.
+ *
+ * Fix: mirror the guard. Where the carve is suppressed (guard < 1), sink the
+ * water vertex DOWN beneath the local (un-carved) ground so it's hidden. Scaled
+ * by exactly (1 - guard): in the entire main pool (guard = 1) this is 0, so the
+ * visible lake is unchanged; only the suppressed rim lobe tucks under the sand.
+ */
+function waterVertexY(vx, vz) {
+  const r = Math.sqrt(vx * vx + vz * vz);
+  const og = Math.min(Math.max((r - 10) / 7, 0), 1);
+  const guard = og * og * (3 - 2 * og); // same smoothstep as the terrain carve
+  const exposure = 1 - guard;           // 1 near origin, 0 across the main pool
+  if (exposure <= 0.001) return 0;
+  const groundY = terrainHeight(vx, vz);
+  const hideY = groundY - 0.5 - WATER_Y; // local Y that buries the vertex 0.5 under ground
+  return Math.min(0, hideY * exposure);  // lerp 0→hideY by exposure; never raise water
+}
+
+/**
  * Build a low-poly disc for the water surface.
  * Vertices lie at varying radii (concentric rings + centre) so the
  * vertex-wobble ripple looks organic rather than spinning.
@@ -198,7 +225,7 @@ function buildWaterGeometry() {
   const indices = [];
 
   // Centre vertex
-  positions.push(POND_X, 0, POND_Z);
+  positions.push(POND_X, waterVertexY(POND_X, POND_Z), POND_Z);
 
   // Concentric rings — each ring's radius follows the organic pond outline
   // (pondEdgeRadius) scaled inward, so the whole pool is an irregular lobed shape.
@@ -211,7 +238,7 @@ function buildWaterGeometry() {
       const radius = pondEdgeRadius(angle) * frac;
       const vx = POND_X + Math.cos(angle) * radius;
       const vz = POND_Z + Math.sin(angle) * radius;
-      positions.push(vx, 0, vz);
+      positions.push(vx, waterVertexY(vx, vz), vz);
     }
   }
 
