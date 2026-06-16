@@ -1,117 +1,93 @@
 /**
- * LakeGrass — scatters small grass-tuft GLBs around the pond's organic shoreline.
- * Placement follows pondEdgeRadius(angle) so the grass hugs the irregular
- * waterline, with seeded jitter and small per-tuft scale ("not too big").
+ * LakeGrass — small low-poly grass tufts scattered around the pond's organic
+ * shoreline (placement follows pondEdgeRadius(angle)).
  *
- * The grass_brush.glb ships with an alpha-MASKED ("MASK", alphaCutoff ~0.456)
- * material whose visibility lives entirely in a baseColor alpha texture (a grass
- * "card"). With the default white baseColorFactor and that cutout, the tufts
- * render invisible. On top of that, the model's tall axis is local +Z, and the
- * GLB's two SceneRoot matrices cancel out — so the tuft lies FLAT on the ground
- * (tall axis = world Z) instead of standing up.
- *
- * Fix (local to LakeGrass so other GlbScenery callers are untouched): load the
- * GLB ourselves, override the mesh material with a simple flat low-poly green
- * MeshStandardMaterial (no alpha mask), rotate the tuft upright (Z->Y), then
- * recenter / scale / ground exactly like GlbScenery so placement still works.
+ * NOTE: this used to instance grass_brush.glb, but that model's geometry made
+ * grounding unreliable (its bounding box didn't correspond to the visible blade
+ * base, so the tufts floated no matter how they were offset). Replaced with
+ * PROCEDURAL blades whose bases sit at local y=0 — so a single static
+ * `position={[x, terrainHeight(x,z), z]}` grounds them exactly like the shore
+ * rocks, which are known to sit correctly on the ground.
  */
 import React, { useMemo } from "react";
-import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
 import { seededRng } from "./particleUtils";
 
-const URL = "/models/grass_brush.glb";
 const COUNT = 40;
 
-// Pleasant low-poly grass green, double-sided so thin blades read from any angle.
-const GRASS_MAT = new THREE.MeshStandardMaterial({
-  color: "#6FA84B",
-  flatShading: true,
-  roughness: 0.9,
-  metalness: 0,
-  side: THREE.DoubleSide,
-});
+// A single grass blade: a thin tapered shape standing on its base (y=0 → up).
+// Built once and shared; per-blade transforms vary the look.
+const BLADE_GEO = (() => {
+  // tapered quad: wide at base, narrow at tip, with a slight forward bend baked in
+  const w = 0.5; // base half-width (scaled down per-tuft)
+  const h = 1.0; // unit height (scaled per-tuft)
+  const g = new THREE.BufferGeometry();
+  const verts = new Float32Array([
+    -w, 0, 0, w, 0, 0, -w * 0.5, h * 0.55, 0.05,
+    w, 0, 0, w * 0.5, h * 0.55, 0.05, -w * 0.5, h * 0.55, 0.05,
+    -w * 0.5, h * 0.55, 0.05, w * 0.5, h * 0.55, 0.05, 0, h, 0.12,
+  ]);
+  g.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+  g.computeVertexNormals();
+  return g;
+})();
+
+const GRASS_MATS = [
+  new THREE.MeshStandardMaterial({ color: "#6FA84B", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+  new THREE.MeshStandardMaterial({ color: "#7CB85A", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+  new THREE.MeshStandardMaterial({ color: "#5E9440", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+];
 
 function buildPlacements() {
   const out = [];
   for (let i = 0; i < COUNT; i += 1) {
-    const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.42;
+    const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.5;
     const edge = pondEdgeRadius(angle);
-    // sit on the bank just OUTSIDE the waterline (so it's on land, not submerged)
-    const radialFrac = 1.12 + seededRng(i * 7 + 2) * 0.24; // 1.12–1.36 × edge
+    const radialFrac = 1.06 + seededRng(i * 7 + 2) * 0.3; // 1.06–1.36 × edge (on the bank)
     const r = edge * radialFrac;
     out.push({
       key: i,
       x: POND_X + Math.cos(angle) * r,
       z: POND_Z + Math.sin(angle) * r,
-      // small, clearly-visible tufts: ~1.2–2.2 units tall
-      targetHeight: 1.2 + seededRng(i * 23 + 9) * 1.0,
+      height: 0.7 + seededRng(i * 23 + 9) * 0.7, // 0.7–1.4 tall — small tufts
       rotationY: seededRng(i * 31 + 3) * Math.PI * 2,
+      seed: i,
     });
   }
   return out;
 }
 
-function GrassTuft({ x, z, targetHeight, rotationY }) {
-  const { scene } = useGLTF(URL);
+/** A tuft = a fan of blades, all rooted at local y=0 (so the group grounds cleanly). */
+function GrassTuft({ x, z, height, rotationY, seed }) {
+  const blades = useMemo(() => {
+    const n = 5 + Math.floor(seededRng(seed * 3 + 1) * 3); // 5–7 blades
+    const arr = [];
+    for (let b = 0; b < n; b += 1) {
+      const a = (b / n) * Math.PI * 2 + seededRng(seed * 7 + b) * 0.6;
+      const spread = 0.12 + seededRng(seed * 5 + b) * 0.18; // splay outward
+      const bh = height * (0.7 + seededRng(seed * 11 + b) * 0.5);
+      const bw = 0.18 + seededRng(seed * 13 + b) * 0.12;
+      arr.push({
+        rotY: a,
+        // tilt outward from vertical so blades fan; base stays at y=0
+        tilt: spread + seededRng(seed * 17 + b) * 0.15,
+        scale: [bw, bh, bw],
+        mat: GRASS_MATS[b % GRASS_MATS.length],
+      });
+    }
+    return arr;
+  }, [height, seed]);
 
-  const model = useMemo(() => {
-    const c = scene.clone(true);
-
-    // Override the alpha-masked grass-card material with a solid green so the
-    // tufts actually draw. Keep shadows.
-    c.traverse((o) => {
-      if (o.isMesh) {
-        o.material = GRASS_MAT;
-        o.castShadow = true;
-        o.receiveShadow = true;
-      }
-    });
-
-    // Stand the tuft upright: the GLB's tall axis is local +Z and the root
-    // matrices cancel, so rotate -90° about X to bring +Z up into world +Y.
-    // (+90° points it DOWN, which left the base floating in the air.)
-    c.rotation.x = -Math.PI / 2;
-    c.updateWorldMatrix(true, true);
-
-    // Recenter on the footprint base and ground at y=0 (in the wrapper group),
-    // mirroring GlbScenery, then scale to the desired height.
-    const box = new THREE.Box3();
-    const tmp = new THREE.Box3();
-    c.traverse((o) => {
-      if (o.isMesh && o.visible) {
-        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-        tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
-        box.union(tmp);
-      }
-    });
-    if (box.isEmpty()) return c;
-
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    c.position.set(-center.x, -box.min.y, -center.z);
-
-    const g = new THREE.Group();
-    g.add(c);
-    // Scale so the tuft stands ~targetHeight units tall (small but visible).
-    g.scale.setScalar(targetHeight / Math.max(size.y, 0.001));
-    return g;
-  }, [scene, targetHeight]);
-
-  // Deterministic grounding, exactly like ShoreRocks: the recenter above puts
-  // the tuft's base at local y=0, so a single static position prop grounds it.
-  // The -0.1 tucks the base slightly into the sand. No imperative mutation, so
-  // R3F re-renders can't desync the placement.
-  // The GLB's geometry extends below its visible blades (empty lower portion), so
-  // grounding the bbox base leaves the visible grass floating. Sink by a fraction
-  // of the tuft height so the VISIBLE blades meet the ground. (Verified visually.)
+  // Base at local y=0 → grounds exactly like ShoreRocks via the static prop.
   return (
-    <primitive
-      object={model}
-      position={[x, terrainHeight(x, z) - 0.2 * targetHeight, z]}
-      rotation={[0, rotationY, 0]}
-    />
+    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotationY, 0]}>
+      {blades.map((bl, i) => (
+        <group key={i} rotation={[bl.tilt, bl.rotY, 0]}>
+          <mesh geometry={BLADE_GEO} scale={bl.scale} material={bl.mat} castShadow receiveShadow />
+        </group>
+      ))}
+    </group>
   );
 }
 
@@ -120,16 +96,8 @@ export function LakeGrass() {
   return (
     <group name="lake-grass">
       {items.map((it) => (
-        <GrassTuft
-          key={it.key}
-          x={it.x}
-          z={it.z}
-          targetHeight={it.targetHeight}
-          rotationY={it.rotationY}
-        />
+        <GrassTuft key={it.key} {...it} />
       ))}
     </group>
   );
 }
-
-useGLTF.preload(URL);
