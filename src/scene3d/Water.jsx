@@ -1,0 +1,464 @@
+/**
+ * Water.jsx — Seasonal pond nestled in the terrain diorama.
+ *
+ * Pond center: x ≈ -30, z ≈ -22  (≈ 37 units from origin, well clear of the
+ * clothesline's radius-14 exclusion zone). Diameter: ~18 units.
+ *
+ * Season behaviour:
+ *   spring  — fresh blue-green, gentle vertex ripple, soft glints
+ *   summer  — warm teal, same ripple, brighter glints
+ *   autumn  — cooler desaturated slate-blue, slower ripple
+ *   winter  — opaque faceted ice (pale blue-white), crack lines, no ripple
+ *   night   — dark reflective navy, faint moonlight glints, very slow ripple
+ */
+
+import React, { useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { terrainHeight, POND_X, POND_Z, POND_RADIUS } from "./coords";
+import { seededRng } from "./particleUtils";
+
+// ─── constants ────────────────────────────────────────────────────────────────
+// POND_X/Z/RADIUS come from coords.js (same values the terrain basin is carved
+// from) so the water fills the bowl exactly.
+
+const SHORE_WIDTH = 2.4;    // extra band of shore geometry around the disc
+const RADIAL_SEGS = 26;     // segments around the circle (low-poly look)
+const RING_SEGS = 5;        // concentric rings inside the disc
+
+// The terrain is carved into a ~1.9-deep bowl at the pond centre. Fill it part
+// way so the water has a real waterline with banks sloping up out of it (the
+// disc edge tucks under the banks instead of sitting proud as a flat circle).
+function computeWaterY() {
+  return terrainHeight(POND_X, POND_Z) + 0.45;
+}
+
+const WATER_Y = computeWaterY();
+
+// ─── season colour palette ────────────────────────────────────────────────────
+
+const SEASON_CONFIG = {
+  spring: {
+    color: new THREE.Color("#5EC4A8"),
+    opacity: 0.72,
+    rippleSpeed: 0.55,
+    rippleAmp: 0.042,
+    glintColor: new THREE.Color("#ADFFD8"),
+    roughness: 0.18,
+    metalness: 0.35,
+  },
+  summer: {
+    color: new THREE.Color("#2AA8C4"),
+    opacity: 0.75,
+    rippleSpeed: 0.65,
+    rippleAmp: 0.048,
+    glintColor: new THREE.Color("#B8F0FF"),
+    roughness: 0.14,
+    metalness: 0.42,
+  },
+  autumn: {
+    color: new THREE.Color("#4A7A90"),
+    opacity: 0.78,
+    rippleSpeed: 0.28,
+    rippleAmp: 0.026,
+    glintColor: new THREE.Color("#8AB0BE"),
+    roughness: 0.3,
+    metalness: 0.25,
+  },
+  winter: {
+    // Bright sky-blue frozen pond.
+    color: new THREE.Color("#76C7F0"),
+    opacity: 1.0,
+    rippleSpeed: 0,
+    rippleAmp: 0,
+    glintColor: new THREE.Color("#E6F6FF"),
+    roughness: 0.4,
+    metalness: 0.18,
+  },
+  night: {
+    color: new THREE.Color("#1A2E55"),
+    opacity: 0.88,
+    rippleSpeed: 0.18,
+    rippleAmp: 0.022,
+    glintColor: new THREE.Color("#6088C8"),
+    roughness: 0.08,
+    metalness: 0.6,
+  },
+};
+
+// ─── geometry builders ────────────────────────────────────────────────────────
+
+/**
+ * Build a low-poly disc for the water surface.
+ * Vertices lie at varying radii (concentric rings + centre) so the
+ * vertex-wobble ripple looks organic rather than spinning.
+ */
+function buildWaterGeometry() {
+  const positions = [];
+  const indices = [];
+
+  // Centre vertex
+  positions.push(POND_X, 0, POND_Z);
+
+  // Concentric rings
+  for (let r = 1; r <= RING_SEGS; r++) {
+    const radius = POND_RADIUS * (r / RING_SEGS);
+    for (let s = 0; s < RADIAL_SEGS; s++) {
+      const angle = (s / RADIAL_SEGS) * Math.PI * 2;
+      const vx = POND_X + Math.cos(angle) * radius;
+      const vz = POND_Z + Math.sin(angle) * radius;
+      positions.push(vx, 0, vz);
+    }
+  }
+
+  // Fan from centre to first ring
+  for (let s = 0; s < RADIAL_SEGS; s++) {
+    const a = 1 + s;
+    const b = 1 + ((s + 1) % RADIAL_SEGS);
+    indices.push(0, a, b);
+  }
+
+  // Quads between rings
+  for (let r = 0; r < RING_SEGS - 1; r++) {
+    const innerBase = 1 + r * RADIAL_SEGS;
+    const outerBase = 1 + (r + 1) * RADIAL_SEGS;
+    for (let s = 0; s < RADIAL_SEGS; s++) {
+      const i0 = innerBase + s;
+      const i1 = innerBase + ((s + 1) % RADIAL_SEGS);
+      const o0 = outerBase + s;
+      const o1 = outerBase + ((s + 1) % RADIAL_SEGS);
+      indices.push(i0, o0, i1);
+      indices.push(i1, o0, o1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(positions);
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Shore band: a narrow ring of geometry around the pond edge, coloured darker
+ * (wet sand / dark shore) so the water disc doesn't float.
+ */
+function buildShoreGeometry() {
+  const positions = [];
+  const indices = [];
+  const colors = [];
+
+  const innerR = POND_RADIUS;
+  const outerR = POND_RADIUS + SHORE_WIDTH;
+  const darkShore = new THREE.Color("#A2855A"); // damp sand at the waterline
+  const midShore = new THREE.Color("#BFA372");  // blends out to dry ground
+
+  for (let s = 0; s < RADIAL_SEGS; s++) {
+    const angle = (s / RADIAL_SEGS) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // inner vertex (pond edge — slightly depressed)
+    const ix = POND_X + cos * innerR;
+    const iz = POND_Z + sin * innerR;
+    const iy = terrainHeight(ix, iz) - 0.08;
+    positions.push(ix, iy, iz);
+    colors.push(darkShore.r, darkShore.g, darkShore.b);
+
+    // outer vertex (blends back into terrain)
+    const ox = POND_X + cos * outerR;
+    const oz = POND_Z + sin * outerR;
+    const oy = terrainHeight(ox, oz);
+    positions.push(ox, oy, oz);
+    colors.push(midShore.r, midShore.g, midShore.b);
+  }
+
+  // Quads around the ring
+  for (let s = 0; s < RADIAL_SEGS; s++) {
+    const i0 = s * 2;
+    const i1 = s * 2 + 1;
+    const i2 = ((s + 1) % RADIAL_SEGS) * 2;
+    const i3 = ((s + 1) % RADIAL_SEGS) * 2 + 1;
+    indices.push(i0, i2, i1);
+    indices.push(i1, i2, i3);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(colors), 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Ice crack lines for winter — a handful of line segments radiating across the
+ * frozen surface, roughly centred on the pond.
+ */
+function buildIceCracks() {
+  const pts = [];
+  const crackCount = 6;
+  for (let i = 0; i < crackCount; i++) {
+    // Seeded deterministic positions
+    const seed1 = Math.sin(i * 13.7) * 0.5 + 0.5;
+    const seed2 = Math.sin(i * 27.3 + 1.1) * 0.5 + 0.5;
+    const seed3 = Math.sin(i * 41.9 + 2.3) * 0.5 + 0.5;
+    const angle = seed1 * Math.PI * 2;
+    const startR = seed2 * POND_RADIUS * 0.25;
+    const endR = POND_RADIUS * (0.45 + seed3 * 0.45);
+    const jitter = (Math.sin(i * 53.1) * 0.5 + 0.5) * 0.4 - 0.2;
+
+    pts.push(
+      new THREE.Vector3(
+        POND_X + Math.cos(angle) * startR,
+        WATER_Y + 0.01,
+        POND_Z + Math.sin(angle) * startR
+      ),
+      new THREE.Vector3(
+        POND_X + Math.cos(angle + jitter) * endR,
+        WATER_Y + 0.01,
+        POND_Z + Math.sin(angle + jitter) * endR
+      )
+    );
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  return geo;
+}
+
+// ─── glint sparkles (points) ─────────────────────────────────────────────────
+
+function buildGlintGeometry(count = 14) {
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const a = (Math.sin(i * 37.1) * 0.5 + 0.5) * Math.PI * 2;
+    const r = (Math.sin(i * 71.3 + 1) * 0.5 + 0.5) * POND_RADIUS * 0.85;
+    positions[i * 3] = POND_X + Math.cos(a) * r;
+    positions[i * 3 + 1] = WATER_Y + 0.05;
+    positions[i * 3 + 2] = POND_Z + Math.sin(a) * r;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  return geo;
+}
+
+// ─── shore rock season palette ────────────────────────────────────────────────
+// Matches Foliage.jsx SEASON_COLORS rock entries exactly
+
+const ROCK_PALETTE = {
+  spring: { rockA: "#9AADA4", rockB: "#B2C4BC" },            // mossy grey-green
+  summer: { rockA: "#C8A870", rockB: "#DAB882" },            // warm sandstone
+  autumn: { rockA: "#C0885C", rockB: "#B87840" },            // warm grey-brown
+  winter: { rockA: "#7A8898", rockB: "#8898A8", snow: "#EEF2F8" }, // cool grey + snow
+  night:  { rockA: "#202228", rockB: "#282A30" },            // near-black silhouettes
+};
+
+// ─── shore rock placement (seeded, irregular ring) ────────────────────────────
+
+/**
+ * Returns an array of rock descriptors placed around the pond shore.
+ * Uses a deterministic seeded RNG so positions never drift between renders.
+ *
+ * Strategy:
+ *  - 20 rocks total: 6 large anchor boulders, 14 smaller stones.
+ *  - Placed on an irregular ring between POND_RADIUS*0.88 and POND_RADIUS+SHORE_WIDTH+0.6.
+ *    Inner fraction → half-submerged at waterline; outer fraction → back from shore.
+ *  - Angular jitter breaks the tidy-circle feel.
+ *  - A handful of intentional gaps (open water views) via angle exclusion.
+ */
+function buildShoreRocks() {
+  const rocks = [];
+
+  // Anchor boulders: 6 large, spread unevenly around the ring
+  const anchorAngles = [0.35, 1.12, 2.05, 2.88, 4.10, 5.30]; // radians, hand-tuned
+  anchorAngles.forEach((baseAngle, i) => {
+    const s = seededRng(i * 31 + 7);
+    const angle = baseAngle + (seededRng(i * 17 + 3) - 0.5) * 0.38;
+    // Vary radial placement: some kissing the water (0.90 r), some slightly back (1.05 r)
+    const radialFrac = 0.90 + seededRng(i * 43 + 11) * 0.18;
+    const r = POND_RADIUS * radialFrac;
+    const x = POND_X + Math.cos(angle) * r;
+    const z = POND_Z + Math.sin(angle) * r;
+    const y = terrainHeight(x, z);
+    const scale = 0.5 + seededRng(i * 61 + 5) * 0.42;    // 0.50–0.92
+    const rotY = seededRng(i * 79 + 13) * Math.PI * 2;
+    const rockSeed = seededRng(i * 53 + 1);
+    rocks.push({ x, y, z, scale, rotY, rockSeed, isLarge: true, slot: i });
+  });
+
+  // Smaller stones: 14, scattered at tighter radii with more angular jitter
+  const stoneCount = 14;
+  for (let i = 0; i < stoneCount; i++) {
+    // Spread across the full circle, with a gap around ~3.5–3.9 rad (open water view)
+    let angle = (i / stoneCount) * Math.PI * 2 + seededRng(i * 23 + 99) * 0.55;
+    // Nudge to avoid the intentional open gap band
+    if (angle > 3.4 && angle < 3.95) angle += 0.55;
+
+    const radialFrac = 0.86 + seededRng(i * 37 + 77) * 0.32; // 0.86–1.18 × POND_RADIUS
+    const r = POND_RADIUS * radialFrac;
+    const x = POND_X + Math.cos(angle) * r;
+    const z = POND_Z + Math.sin(angle) * r;
+    const y = terrainHeight(x, z);
+    const scale = 0.22 + seededRng(i * 41 + 55) * 0.34;   // 0.22–0.56
+    const rotY = seededRng(i * 67 + 21) * Math.PI * 2;
+    const rockSeed = seededRng(i * 29 + 3);
+    rocks.push({ x, y, z, scale, rotY, rockSeed, isLarge: false, slot: i + 10 });
+  }
+
+  return rocks;
+}
+
+// ─── shore rock renderers ─────────────────────────────────────────────────────
+
+/** Single low-poly boulder — icosahedron (detail=0) squashed like Foliage's Rock */
+function ShoreRock({ x, y, z, scale: s, rotY, rockSeed, isLarge, season }) {
+  const pal = ROCK_PALETTE[season] || ROCK_PALETTE.summer;
+  // Alternate between the two palette colours using rockSeed
+  const baseColor = rockSeed > 0.5 ? pal.rockA : pal.rockB;
+  const isWinter = season === "winter";
+
+  // Squash/stretch ratios: vary per rock for organic feel
+  const sx = s * (1.2 + rockSeed * 0.25);
+  const sy = s * (0.55 + rockSeed * 0.22);
+  const sz = s * (1.0 + rockSeed * 0.18);
+
+  // Seat so the rock bottom sits on the terrain (icosa radius ≈ 0.55 * sy)
+  const yOffset = 0.55 * sy;
+
+  return (
+    <group position={[x, y + yOffset, z]} rotation={[0.15 * rockSeed, rotY, 0.08 * rockSeed]}>
+      <mesh scale={[sx, sy, sz]} castShadow receiveShadow>
+        <icosahedronGeometry args={[0.55, 0]} />
+        <meshStandardMaterial color={baseColor} flatShading roughness={0.88} metalness={0.04} />
+      </mesh>
+      {/* Winter: small snow cap cone on top of boulder */}
+      {isWinter && isLarge && (
+        <mesh position={[0, 0.55 * sy + 0.05, 0]}>
+          <coneGeometry args={[0.32 * sx, 0.14 * sy + 0.1, 5]} />
+          <meshStandardMaterial color={pal.snow} flatShading roughness={0.95} metalness={0} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/** Rocky shore group — memoised placement, season-tinted */
+function ShoreRocks({ season }) {
+  const rocks = useMemo(() => buildShoreRocks(), []);
+
+  return (
+    <group name="shore-rocks">
+      {rocks.map((rock, i) => (
+        <ShoreRock key={i} {...rock} season={season} />
+      ))}
+    </group>
+  );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+
+export function Water({ seasonKey, palette }) {
+  const season = seasonKey || "summer";
+  const cfg = SEASON_CONFIG[season] || SEASON_CONFIG.summer;
+  const isFrozen = season === "winter";
+
+  // Stable geometry (doesn't change per season)
+  const waterGeo = useMemo(() => buildWaterGeometry(), []);
+  const crackGeo = useMemo(() => buildIceCracks(), []);
+  const glintGeo = useMemo(() => buildGlintGeometry(), []);
+
+  // Store original vertex Y positions for ripple animation
+  const origPositions = useMemo(() => {
+    const pos = waterGeo.attributes.position;
+    const arr = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) arr[i] = pos.getY(i);
+    return arr;
+  }, [waterGeo]);
+
+  const waterMatRef = useRef();
+  const waterMeshRef = useRef();
+  const glintRef = useRef();
+
+  // Animate ripple: per-vertex Y wobble keyed to world X/Z position + time
+  useFrame(({ clock }) => {
+    if (isFrozen) return;
+    const t = clock.elapsedTime;
+    const { rippleSpeed, rippleAmp } = cfg;
+
+    // Water surface vertex wobble
+    if (waterMeshRef.current) {
+      const pos = waterMeshRef.current.geometry.attributes.position;
+      const origPos = waterGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const wx = origPos.getX(i);
+        const wz = origPos.getZ(i);
+        const dx = wx - POND_X;
+        const dz = wz - POND_Z;
+        // Concentric ripple + slight directional drift
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const wave =
+          Math.sin(dist * 1.1 - t * rippleSpeed * 3.5) * rippleAmp * 0.6 +
+          Math.sin(dx * 0.45 + t * rippleSpeed * 2.1) * rippleAmp * 0.25 +
+          Math.cos(dz * 0.52 - t * rippleSpeed * 1.8) * rippleAmp * 0.25;
+        pos.setY(i, origPositions[i] + wave);
+      }
+      pos.needsUpdate = true;
+      waterMeshRef.current.geometry.computeVertexNormals();
+    }
+
+    // Glint opacity pulse
+    if (glintRef.current) {
+      glintRef.current.material.opacity =
+        0.35 + Math.sin(t * rippleSpeed * 4.2 + 1.3) * 0.25;
+    }
+  });
+
+  return (
+    <group>
+      {/* Rocky shore boulders and stones */}
+      <ShoreRocks season={season} />
+
+      {/* Water / ice disc */}
+      <mesh
+        ref={waterMeshRef}
+        position={[0, WATER_Y, 0]}
+        geometry={waterGeo}
+        receiveShadow
+      >
+        <meshStandardMaterial
+          ref={waterMatRef}
+          color={cfg.color}
+          emissive={cfg.color}
+          emissiveIntensity={isFrozen ? 0 : 0.08}
+          transparent={!isFrozen}
+          opacity={cfg.opacity}
+          roughness={cfg.roughness}
+          metalness={isFrozen ? 0.15 : 0.08}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Winter ice crack lines */}
+      {isFrozen && (
+        <lineSegments geometry={crackGeo}>
+          <lineBasicMaterial color="#8AAFCC" transparent opacity={0.55} />
+        </lineSegments>
+      )}
+
+      {/* Surface glints (small bright points) — liquid seasons only */}
+      {!isFrozen && (
+        <points ref={glintRef} geometry={glintGeo}>
+          <pointsMaterial
+            color={cfg.glintColor}
+            size={0.18}
+            sizeAttenuation
+            transparent
+            opacity={0.45}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </points>
+      )}
+    </group>
+  );
+}

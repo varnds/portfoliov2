@@ -1,0 +1,120 @@
+/**
+ * PlayHints — onboarding for play mode.
+ *   • WelcomeCard: a brief goal + controls card shown once on Play.
+ *   • ContextHint: a small bar that changes with what you're doing — move when you
+ *     land, "uncover"/"dig" when you're standing by a marker.
+ */
+import React from "react";
+import { useGame, dismissWelcome } from "./gameStore";
+
+const wrap = {
+  position: "fixed",
+  left: "50%",
+  transform: "translateX(-50%)",
+  zIndex: 9300,
+  fontFamily: "'IBM Plex Mono', monospace",
+};
+
+export function WelcomeCard() {
+  const { playing, welcomeSeen } = useGame();
+  if (!playing || welcomeSeen) return null;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9400,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(20,12,8,0.30)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 440,
+          width: "86%",
+          background: "#FFFDF7",
+          borderRadius: 16,
+          padding: "30px 32px",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, color: "#3A2A20", marginBottom: 10 }}>
+          Someone lives here.
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, lineHeight: 1.6, color: "#5A463A" }}>
+          Wander and piece together who they are — follow the glowing markers, and
+          dig where the earth is turned.
+        </div>
+        <div
+          style={{
+            margin: "16px 0 4px",
+            fontSize: 12,
+            letterSpacing: 1,
+            color: "#8A7256",
+            lineHeight: 1.8,
+          }}
+        >
+          <b>Move</b> WASD / arrows &nbsp;·&nbsp; <b>Look</b> drag<br />
+          <b>Zoom</b> scroll &nbsp;·&nbsp; <b>Uncover</b> click the marker
+        </div>
+        <button
+          onClick={dismissWelcome}
+          style={{
+            marginTop: 18,
+            border: "none",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            color: "#fff",
+            background: "#E2725B",
+            borderRadius: 999,
+            padding: "10px 22px",
+          }}
+        >
+          Start exploring
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ContextHint() {
+  const { playing, welcomeSeen, landed, discovered, nearTarget, activeReveal } = useGame();
+  if (!playing || !welcomeSeen || !landed || activeReveal) return null;
+
+  let text = null;
+  if (nearTarget) {
+    text = nearTarget.buried ? "⛏  Click the mound to dig it up" : "✦  Click the glowing marker to uncover";
+  } else if (discovered.size === 0) {
+    text = "WASD / arrows to move  ·  drag to look  ·  scroll to zoom";
+  }
+  if (!text) return null;
+
+  return (
+    <div
+      style={{
+        ...wrap,
+        top: 18,
+        padding: "9px 18px",
+        borderRadius: 999,
+        background: "rgba(255,253,247,0.86)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
+        fontSize: 13,
+        fontWeight: 600,
+        letterSpacing: 0.5,
+        color: "#5A463A",
+        pointerEvents: "none",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </div>
+  );
+}
