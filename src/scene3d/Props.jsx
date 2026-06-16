@@ -324,8 +324,15 @@ export function OrangeBird({ show, onChirp }) {
     const z = 1.5 + Math.cos(angle) * 4.5;
     const y = 6.2 + Math.sin(t * 0.7) * 0.9 + (zipping ? Math.sin(dash.current * 22) * 0.7 : 0);
     ref.current.position.set(x, y, z);
-    const dir = Math.cos(angle);
-    ref.current.rotation.y = dir >= 0 ? -Math.PI / 2 : Math.PI / 2;
+    // Face the direction of travel (tangent to the elliptical path) so the bird
+    // noses forward instead of gliding sideways. The path velocity is the
+    // derivative of (x, z) w.r.t. angle: (cos·13, -sin·4.5). Local forward is +X
+    // (beak); a +X vector rotated by rotation.y=θ points to (cosθ, 0, -sinθ), so
+    // matching it to the velocity gives θ = atan2(-vz, vx).
+    const vx = Math.cos(angle) * 13;
+    const vz = -Math.sin(angle) * 4.5;
+    ref.current.rotation.y = Math.atan2(-vz, vx);
+    // Gentle nose bob; banks a little harder when zipping away.
     ref.current.rotation.z = Math.sin(t * 0.7) * 0.12 + (zipping ? 0.4 : 0);
     const flap = Math.sin(t * (zipping ? 26 : 9)) * 0.7 + 0.2;
     if (leftWing.current) leftWing.current.rotation.z = flap;
