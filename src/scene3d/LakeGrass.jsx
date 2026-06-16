@@ -17,7 +17,19 @@ import * as THREE from "three";
 import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
 import { seededRng } from "./particleUtils";
 
-const COUNT = 56;
+const COUNT = 64;
+
+// The lake is viewed from the front (+Z, toward the open desert); the back rim
+// (toward the canyons) is hidden. Put grass only on the VISIBLE front arc, not a
+// full ring. Front faces +Z (angle 90°); keep tufts within FRONT_HALF of it.
+const FRONT_ANGLE = Math.PI / 2;
+const FRONT_HALF = (118 * Math.PI) / 180;
+function angDist(a, b) {
+  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+}
+
+// RIP tombstone (PastCareers discoverable) — Clump grass clusters here instead.
+const TOMB = { x: -20, z: 2 };
 
 // Shared tapered-blade geometry (base at y=0, tip at y=1), used by Fan + Wispy.
 const BLADE_GEO = (() => {
@@ -41,24 +53,45 @@ const MATS = [
 ];
 const m = (i) => MATS[i % MATS.length];
 
-function buildPlacements() {
+// Lake grass: Fan(0)/Spikes(1)/Wispy(3) mixed along the VISIBLE front arc only.
+const LAKE_TYPES = [0, 1, 3];
+function buildLakePlacements() {
   const out = [];
   for (let i = 0; i < COUNT; i += 1) {
     const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.22;
+    if (angDist(angle, FRONT_ANGLE) > FRONT_HALF) continue; // skip the hidden back rim
     const edge = pondEdgeRadius(angle);
     const radialFrac = 1.0 + seededRng(i * 7 + 2) * 0.12; // hug the waterline
     const r = edge * radialFrac;
-    // sector 0..3 by angle → which grass type
-    const norm = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const type = Math.floor((norm / (Math.PI * 2)) * 4) % 4;
+    const type = LAKE_TYPES[Math.floor(seededRng(i * 3 + 1) * LAKE_TYPES.length)];
     out.push({
-      key: i,
+      key: `lake-${i}`,
       x: POND_X + Math.cos(angle) * r,
       z: POND_Z + Math.sin(angle) * r,
       height: 0.35 + seededRng(i * 23 + 9) * 0.35, // small
       rotationY: seededRng(i * 31 + 3) * Math.PI * 2,
       seed: i,
       type,
+    });
+  }
+  return out;
+}
+
+// Clump grass clustered around the RIP tombstone (not the lake).
+function buildTombPlacements() {
+  const out = [];
+  const n = 12;
+  for (let i = 0; i < n; i += 1) {
+    const a = (i / n) * Math.PI * 2 + seededRng(i * 17 + 91) * 0.9;
+    const rad = 1.0 + seededRng(i * 7 + 71) * 2.2; // small ring of clumps around it
+    out.push({
+      key: `tomb-${i}`,
+      x: TOMB.x + Math.cos(a) * rad,
+      z: TOMB.z + Math.sin(a) * rad,
+      height: 0.3 + seededRng(i * 23 + 33) * 0.3,
+      rotationY: seededRng(i * 31 + 13) * Math.PI * 2,
+      seed: i + 500,
+      type: 2, // Clump
     });
   }
   return out;
@@ -167,7 +200,10 @@ function GrassTuft({ x, z, height, rotationY, seed, type }) {
 }
 
 export function LakeGrass() {
-  const items = useMemo(buildPlacements, []);
+  const items = useMemo(
+    () => [...buildLakePlacements(), ...buildTombPlacements()],
+    []
+  );
   return (
     <group name="lake-grass">
       {items.map((it) => (
