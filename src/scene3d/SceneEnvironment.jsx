@@ -11,6 +11,7 @@ import {
 import { GarmentMesh } from "./GarmentMesh";
 import { Terrain } from "./Terrain";
 import { Water } from "./Water";
+import { LakeGrass } from "./LakeGrass";
 import { Foliage } from "./Foliage";
 import { LandmarkTree } from "./LandmarkTree";
 import { PondRipples } from "./PondRipples";
@@ -85,6 +86,7 @@ export function SceneEnvironment({
       {/* Lake kept in code but HIDDEN — replaced by the little-pond GLB below. */}
       {SHOW_WATER && <Water seasonKey={seasonKey} palette={palette} />}
       {SHOW_WATER && <PondRipples seasonKey={seasonKey} palette={palette} />}
+      {SHOW_WATER && <LakeGrass />}
       <SkyDrama seasonKey={seasonKey} palette={palette} />
       {/* Camp tent on the far side of the lake */}
       <GlbScenery
