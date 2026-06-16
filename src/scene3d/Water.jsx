@@ -208,20 +208,19 @@ function buildWaterGeometry() {
     const frac = r / RING_SEGS;
     for (let s = 0; s < WATER_RADIAL_SEGS; s++) {
       const angle = (s / WATER_RADIAL_SEGS) * Math.PI * 2;
-      const fullR = pondEdgeRadius(angle) * frac;
-      // Recede the disc where the terrain basin is suppressed (the same
-      // origin-guard the basin carve uses, in coords.js). Without this the water
-      // sprawls past the carved bowl onto the un-carved clothesline-facing ground
-      // and pokes through terrain dips as stray teal slivers. This trims only the
-      // sprawl; the carved pool (origin guard ~1) is unchanged.
-      const ex = POND_X + Math.cos(angle) * fullR;
-      const ez = POND_Z + Math.sin(angle) * fullR;
-      const og = Math.min(Math.max((Math.sqrt(ex * ex + ez * ez) - 10) / 7, 0), 1);
-      const guard = og * og * (3 - 2 * og); // smoothstep, matches the basin carve
-      const radius = fullR * guard;
+      const radius = pondEdgeRadius(angle) * frac;
       const vx = POND_X + Math.cos(angle) * radius;
       const vz = POND_Z + Math.sin(angle) * radius;
-      positions.push(vx, 0, vz);
+      // The terrain basin carve is suppressed near the origin (origin-guard, to
+      // keep the clothesline yard level). The water plane isn't, so on that side
+      // it floats over un-carved ground as a stray sliver. Tuck those vertices
+      // DOWN to just under the terrain, blended smoothly by the SAME guard, so
+      // the floating water hides while the carved pool surface (guard~1) stays
+      // flat at the waterline. No radius change → no spikes.
+      const og = Math.min(Math.max((Math.sqrt(vx * vx + vz * vz) - 10) / 7, 0), 1);
+      const guard = og * og * (3 - 2 * og);
+      const y = (terrainHeight(vx, vz) - WATER_Y - 0.12) * (1 - guard);
+      positions.push(vx, Math.min(0, y), vz);
     }
   }
 

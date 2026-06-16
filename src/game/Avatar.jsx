@@ -110,12 +110,21 @@ function AvatarModel({ cfg, motion }) {
       else if (moving) want = running ? clips.run || clips.walk : clips.walk || clips.run;
       else want = clips.idle;
       if (want && want !== curAction.current) {
-        if (curAction.current && actions[curAction.current]) actions[curAction.current].fadeOut(0.18);
+        if (curAction.current && actions[curAction.current]) actions[curAction.current].fadeOut(0.15);
         const nx = actions[want];
         if (nx) {
           nx.reset();
           nx.setEffectiveWeight(1);
-          nx.fadeIn(0.18).play();
+          if (want === clips.jump) {
+            // play the (short) jump clip ONCE and hold the last pose — looping it
+            // for the whole hop is what made the jump stutter/glitch.
+            nx.setLoop(THREE.LoopOnce, 1);
+            nx.clampWhenFinished = true;
+          } else {
+            nx.setLoop(THREE.LoopRepeat, Infinity);
+            nx.clampWhenFinished = false;
+          }
+          nx.fadeIn(0.12).play();
         }
         curAction.current = want;
       }
