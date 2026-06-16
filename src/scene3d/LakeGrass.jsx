@@ -15,7 +15,7 @@
  * MeshStandardMaterial (no alpha mask), rotate the tuft upright (Z->Y), then
  * recenter / scale / ground exactly like GlbScenery so placement still works.
  */
-import React, { useLayoutEffect, useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
@@ -55,7 +55,6 @@ function buildPlacements() {
 
 function GrassTuft({ x, z, targetHeight, rotationY }) {
   const { scene } = useGLTF(URL);
-  const ref = useRef();
 
   const model = useMemo(() => {
     const c = scene.clone(true);
@@ -100,24 +99,14 @@ function GrassTuft({ x, z, targetHeight, rotationY }) {
     return g;
   }, [scene, targetHeight]);
 
-  // Bulletproof grounding: after the tuft mounts, measure its ACTUAL world
-  // bounding box and snap its bottom onto the terrain — independent of the
-  // model's internal pivot/orientation (which the recenter math mis-estimated).
-  useLayoutEffect(() => {
-    const obj = ref.current;
-    if (!obj) return;
-    obj.updateWorldMatrix(true, true);
-    const box = new THREE.Box3().setFromObject(obj);
-    if (box.isEmpty()) return;
-    const targetBottom = terrainHeight(x, z) - 0.1; // tuck base slightly into ground
-    obj.position.y += targetBottom - box.min.y;
-  }, [model, x, z]);
-
+  // Deterministic grounding, exactly like ShoreRocks: the recenter above puts
+  // the tuft's base at local y=0, so a single static position prop grounds it.
+  // The -0.1 tucks the base slightly into the sand. No imperative mutation, so
+  // R3F re-renders can't desync the placement.
   return (
     <primitive
-      ref={ref}
       object={model}
-      position={[x, terrainHeight(x, z), z]}
+      position={[x, terrainHeight(x, z) - 0.1, z]}
       rotation={[0, rotationY, 0]}
     />
   );
