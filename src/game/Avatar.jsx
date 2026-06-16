@@ -70,6 +70,25 @@ function AvatarModel({ cfg, motion }) {
   const rig = useMemo(() => {
     const obj = skeletonClone(scene);
     obj.rotation.set(0, 0, 0);
+
+    // Soften the exported PBR so the characters read as cute matte toys instead
+    // of shiny plastic. The avatar GLBs ship with metalness 0.4 (and some with
+    // roughness ~0.27), which gives a metallic sheen plus a hard specular hotspot
+    // under the sun. Flatten to fully non-metal + high roughness so they catch
+    // light as soft clay/fabric. Materials are cloned so we don't mutate the
+    // shared useGLTF cache.
+    obj.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const soften = (m) => {
+        const m2 = m.clone();
+        if ("metalness" in m2) m2.metalness = 0;
+        if ("roughness" in m2) m2.roughness = 0.92;
+        if ("envMapIntensity" in m2) m2.envMapIntensity = 0;
+        return m2;
+      };
+      o.material = Array.isArray(o.material) ? o.material.map(soften) : soften(o.material);
+    });
+
     obj.updateWorldMatrix(true, true);
     const box = new THREE.Box3();
     const tmp = new THREE.Box3();
