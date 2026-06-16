@@ -12,10 +12,10 @@
  *   night   — dark reflective navy, faint moonlight glints, very slow ripple
  */
 
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { terrainHeight, POND_X, POND_Z, POND_RADIUS } from "./coords";
+import { terrainHeight, POND_X, POND_Z, POND_RADIUS, pondEdgeRadius } from "./coords";
 import { seededRng } from "./particleUtils";
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -86,6 +86,34 @@ const SEASON_CONFIG = {
   },
 };
 
+// Sky-gradient stops per season — baked into a tiny equirect texture used as the
+// water's OWN envMap so the whole surface reflects the sky evenly (a real, full
+// reflection rather than just a single sun-specular hot-spot).
+const SKY_GRADIENT = {
+  spring: [[0, "#EAF4E8"], [0.5, "#F3E6C8"], [1, "#D8B98A"]],
+  summer: [[0, "#FBEFD6"], [0.45, "#F3D9AE"], [0.62, "#E8B07A"], [1, "#C98A5A"]],
+  autumn: [[0, "#F3E2C4"], [0.5, "#E6B488"], [1, "#B87848"]],
+  winter: [[0, "#EAF6FF"], [0.55, "#CDE8F6"], [1, "#9FC6DE"]],
+  night:  [[0, "#1B2647"], [0.5, "#22305A"], [1, "#0E1530"]],
+};
+
+function buildSkyEnvMap(season) {
+  const stops = SKY_GRADIENT[season] || SKY_GRADIENT.summer;
+  const c = document.createElement("canvas");
+  c.width = 16;
+  c.height = 64;
+  const ctx = c.getContext("2d");
+  const g = ctx.createLinearGradient(0, 0, 0, 64);
+  stops.forEach(([s, col]) => g.addColorStop(s, col));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 16, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // ─── geometry builders ────────────────────────────────────────────────────────
 
 /**
@@ -100,11 +128,13 @@ function buildWaterGeometry() {
   // Centre vertex
   positions.push(POND_X, 0, POND_Z);
 
-  // Concentric rings
+  // Concentric rings — each ring's radius follows the organic pond outline
+  // (pondEdgeRadius) scaled inward, so the whole pool is an irregular lobed shape.
   for (let r = 1; r <= RING_SEGS; r++) {
-    const radius = POND_RADIUS * (r / RING_SEGS);
+    const frac = r / RING_SEGS;
     for (let s = 0; s < RADIAL_SEGS; s++) {
       const angle = (s / RADIAL_SEGS) * Math.PI * 2;
+      const radius = pondEdgeRadius(angle) * frac;
       const vx = POND_X + Math.cos(angle) * radius;
       const vz = POND_Z + Math.sin(angle) * radius;
       positions.push(vx, 0, vz);
@@ -149,8 +179,6 @@ function buildShoreGeometry() {
   const indices = [];
   const colors = [];
 
-  const innerR = POND_RADIUS;
-  const outerR = POND_RADIUS + SHORE_WIDTH;
   const darkShore = new THREE.Color("#A2855A"); // damp sand at the waterline
   const midShore = new THREE.Color("#BFA372");  // blends out to dry ground
 
@@ -158,6 +186,8 @@ function buildShoreGeometry() {
     const angle = (s / RADIAL_SEGS) * Math.PI * 2;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
+    const innerR = pondEdgeRadius(angle);          // organic waterline
+    const outerR = innerR + SHORE_WIDTH;            // shore band follows it
 
     // inner vertex (pond edge — slightly depressed)
     const ix = POND_X + cos * innerR;
@@ -206,7 +236,7 @@ function buildIceCracks() {
     const seed3 = Math.sin(i * 41.9 + 2.3) * 0.5 + 0.5;
     const angle = seed1 * Math.PI * 2;
     const startR = seed2 * POND_RADIUS * 0.25;
-    const endR = POND_RADIUS * (0.45 + seed3 * 0.45);
+    const endR = pondEdgeRadius(angle) * (0.45 + seed3 * 0.45);
     const jitter = (Math.sin(i * 53.1) * 0.5 + 0.5) * 0.4 - 0.2;
 
     pts.push(
@@ -232,7 +262,7 @@ function buildGlintGeometry(count = 14) {
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
     const a = (Math.sin(i * 37.1) * 0.5 + 0.5) * Math.PI * 2;
-    const r = (Math.sin(i * 71.3 + 1) * 0.5 + 0.5) * POND_RADIUS * 0.85;
+    const r = (Math.sin(i * 71.3 + 1) * 0.5 + 0.5) * pondEdgeRadius(a) * 0.8;
     positions[i * 3] = POND_X + Math.cos(a) * r;
     positions[i * 3 + 1] = WATER_Y + 0.05;
     positions[i * 3 + 2] = POND_Z + Math.sin(a) * r;
@@ -276,7 +306,7 @@ function buildShoreRocks() {
     const angle = baseAngle + (seededRng(i * 17 + 3) - 0.5) * 0.38;
     // Vary radial placement: some kissing the water (0.90 r), some slightly back (1.05 r)
     const radialFrac = 0.90 + seededRng(i * 43 + 11) * 0.18;
-    const r = POND_RADIUS * radialFrac;
+    const r = pondEdgeRadius(angle) * radialFrac;
     const x = POND_X + Math.cos(angle) * r;
     const z = POND_Z + Math.sin(angle) * r;
     const y = terrainHeight(x, z);
@@ -294,8 +324,8 @@ function buildShoreRocks() {
     // Nudge to avoid the intentional open gap band
     if (angle > 3.4 && angle < 3.95) angle += 0.55;
 
-    const radialFrac = 0.86 + seededRng(i * 37 + 77) * 0.32; // 0.86–1.18 × POND_RADIUS
-    const r = POND_RADIUS * radialFrac;
+    const radialFrac = 0.86 + seededRng(i * 37 + 77) * 0.32; // 0.86–1.18 × edge
+    const r = pondEdgeRadius(angle) * radialFrac;
     const x = POND_X + Math.cos(angle) * r;
     const z = POND_Z + Math.sin(angle) * r;
     const y = terrainHeight(x, z);
@@ -367,6 +397,10 @@ export function Water({ seasonKey, palette }) {
   const crackGeo = useMemo(() => buildIceCracks(), []);
   const glintGeo = useMemo(() => buildGlintGeometry(), []);
 
+  // Per-season sky env map for a full-surface reflection.
+  const envMap = useMemo(() => buildSkyEnvMap(season), [season]);
+  useEffect(() => () => envMap.dispose(), [envMap]);
+
   // Store original vertex Y positions for ripple animation
   const origPositions = useMemo(() => {
     const pos = waterGeo.attributes.position;
@@ -429,11 +463,13 @@ export function Water({ seasonKey, palette }) {
           ref={waterMatRef}
           color={cfg.color}
           emissive={cfg.color}
-          emissiveIntensity={isFrozen ? 0 : 0.08}
+          emissiveIntensity={isFrozen ? 0 : 0.06}
           transparent={!isFrozen}
           opacity={cfg.opacity}
-          roughness={cfg.roughness}
-          metalness={isFrozen ? 0.15 : 0.08}
+          roughness={isFrozen ? cfg.roughness : 0.12}
+          metalness={isFrozen ? 0.2 : 0.62}
+          envMap={envMap}
+          envMapIntensity={isFrozen ? 0.9 : 1.55}
           side={THREE.DoubleSide}
         />
       </mesh>

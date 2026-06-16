@@ -11,6 +11,20 @@ export const POND_X = -15;
 export const POND_Z = 16;
 export const POND_RADIUS = 11;
 
+// Organic pond outline: the edge radius varies by angle (sum of low-freq sines)
+// so the pond reads as a natural lobed pool, not a perfect circle. Shared by the
+// water surface, shore band, rock placement AND the terrain basin carve so they
+// all follow the same shape.
+export function pondEdgeRadius(angle) {
+  return (
+    POND_RADIUS *
+    (1 +
+      0.22 * Math.sin(angle * 2 + 0.6) +
+      0.13 * Math.sin(angle * 3 - 1.3) +
+      0.07 * Math.sin(angle * 5 + 2.4))
+  );
+}
+
 const YARD = -0.15;
 
 export function svgXToWorld(x) {
@@ -50,7 +64,9 @@ export function terrainHeight(x, z) {
   // on the surface as a flat disc. An origin guard keeps the clothesline yard level.
   const pdx = x - POND_X;
   const pdz = z - POND_Z;
-  const basinR = POND_RADIUS * 1.55;
+  // Basin follows the organic pond outline (per-angle radius), padded out so the
+  // banks sit just beyond the waterline.
+  const basinR = pondEdgeRadius(Math.atan2(pdz, pdx)) * 1.4;
   const pd = Math.sqrt(pdx * pdx + pdz * pdz);
   if (pd < basinR) {
     const r = Math.sqrt(x * x + z * z);
