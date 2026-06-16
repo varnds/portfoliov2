@@ -390,8 +390,8 @@ function buildShoreRocks() {
     rocks.push({ x, y, z, scale, rotY, rockSeed, isLarge: true, slot: i });
   });
 
-  // Smaller stones: 14, scattered at tighter radii with more angular jitter
-  const stoneCount = 14;
+  // Smaller stones: scattered at tighter radii with more angular jitter
+  const stoneCount = 28;
   for (let i = 0; i < stoneCount; i++) {
     // Spread across the full circle, with a gap around ~3.5–3.9 rad (open water view)
     let angle = (i / stoneCount) * Math.PI * 2 + seededRng(i * 23 + 99) * 0.55;
@@ -407,6 +407,22 @@ function buildShoreRocks() {
     const rotY = seededRng(i * 67 + 21) * Math.PI * 2;
     const rockSeed = seededRng(i * 29 + 3);
     rocks.push({ x, y, z, scale, rotY, rockSeed, isLarge: false, slot: i + 10 });
+  }
+
+  // Outer scatter: small pebbles spread further out on the bank (mixes with the
+  // grass) so the shore reads as a rocky, vegetated edge rather than a tidy ring.
+  const outerCount = 22;
+  for (let i = 0; i < outerCount; i++) {
+    const angle = (i / outerCount) * Math.PI * 2 + seededRng(i * 19 + 131) * 0.7;
+    const radialFrac = 1.2 + seededRng(i * 53 + 61) * 0.55; // 1.2–1.75 × edge (on the bank)
+    const r = pondEdgeRadius(angle) * radialFrac;
+    const x = POND_X + Math.cos(angle) * r;
+    const z = POND_Z + Math.sin(angle) * r;
+    const y = terrainHeight(x, z);
+    const scale = 0.16 + seededRng(i * 47 + 17) * 0.3; // 0.16–0.46 (little pebbles)
+    const rotY = seededRng(i * 71 + 9) * Math.PI * 2;
+    const rockSeed = seededRng(i * 23 + 7);
+    rocks.push({ x, y, z, scale, rotY, rockSeed, isLarge: false, slot: i + 40 });
   }
 
   return rocks;

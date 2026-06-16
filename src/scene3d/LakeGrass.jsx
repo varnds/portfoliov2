@@ -15,14 +15,14 @@
  * MeshStandardMaterial (no alpha mask), rotate the tuft upright (Z->Y), then
  * recenter / scale / ground exactly like GlbScenery so placement still works.
  */
-import React, { useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
 import { seededRng } from "./particleUtils";
 
 const URL = "/models/grass_brush.glb";
-const COUNT = 24;
+const COUNT = 40;
 
 // Pleasant low-poly grass green, double-sided so thin blades read from any angle.
 const GRASS_MAT = new THREE.MeshStandardMaterial({
@@ -55,6 +55,7 @@ function buildPlacements() {
 
 function GrassTuft({ x, z, targetHeight, rotationY }) {
   const { scene } = useGLTF(URL);
+  const ref = useRef();
 
   const model = useMemo(() => {
     const c = scene.clone(true);
@@ -99,9 +100,27 @@ function GrassTuft({ x, z, targetHeight, rotationY }) {
     return g;
   }, [scene, targetHeight]);
 
-  // Ground on the bank, sunk a touch so the base tucks into the slope (no float).
-  const y = terrainHeight(x, z) - 0.2;
-  return <primitive object={model} position={[x, y, z]} rotation={[0, rotationY, 0]} />;
+  // Bulletproof grounding: after the tuft mounts, measure its ACTUAL world
+  // bounding box and snap its bottom onto the terrain — independent of the
+  // model's internal pivot/orientation (which the recenter math mis-estimated).
+  useLayoutEffect(() => {
+    const obj = ref.current;
+    if (!obj) return;
+    obj.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(obj);
+    if (box.isEmpty()) return;
+    const targetBottom = terrainHeight(x, z) - 0.1; // tuck base slightly into ground
+    obj.position.y += targetBottom - box.min.y;
+  }, [model, x, z]);
+
+  return (
+    <primitive
+      ref={ref}
+      object={model}
+      position={[x, terrainHeight(x, z), z]}
+      rotation={[0, rotationY, 0]}
+    />
+  );
 }
 
 export function LakeGrass() {
