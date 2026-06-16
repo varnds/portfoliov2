@@ -121,7 +121,9 @@ export function GlbScenery({
       const re = new RegExp(hideNames, "i");
       c.traverse((o) => {
         if (!o.isMesh) return;
-        const n = `${o.name} ${o.parent ? o.parent.name : ""}`;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        const matNames = mats.map((m) => (m && m.name) || "").join(" ");
+        const n = `${o.name} ${o.parent ? o.parent.name : ""} ${matNames}`;
         if (re.test(n)) o.visible = false;
       });
     }

@@ -98,6 +98,7 @@ export function SceneEnvironment({
         tint={TENT_TINT[seasonKey] || "#C2410C"}
         tintStrength={0.58}
         tintReplace={seasonKey === "spring" || seasonKey === "summer" || seasonKey === "autumn"}
+        hideNames="floor"
       />
       <Foliage seasonKey={seasonKey} palette={palette} />
       <LandmarkTree seasonKey={seasonKey} palette={palette} />

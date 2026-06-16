@@ -211,16 +211,7 @@ function buildWaterGeometry() {
       const radius = pondEdgeRadius(angle) * frac;
       const vx = POND_X + Math.cos(angle) * radius;
       const vz = POND_Z + Math.sin(angle) * radius;
-      // The terrain basin carve is suppressed near the origin (origin-guard, to
-      // keep the clothesline yard level). The water plane isn't, so on that side
-      // it floats over un-carved ground as a stray sliver. Tuck those vertices
-      // DOWN to just under the terrain, blended smoothly by the SAME guard, so
-      // the floating water hides while the carved pool surface (guard~1) stays
-      // flat at the waterline. No radius change → no spikes.
-      const og = Math.min(Math.max((Math.sqrt(vx * vx + vz * vz) - 10) / 7, 0), 1);
-      const guard = og * og * (3 - 2 * og);
-      const y = (terrainHeight(vx, vz) - WATER_Y - 0.12) * (1 - guard);
-      positions.push(vx, Math.min(0, y), vz);
+      positions.push(vx, 0, vz);
     }
   }
 
