@@ -172,8 +172,10 @@ export function Avatar() {
   const distT = useRef(8.5);
   const drag = useRef(false);
   const last = useRef({ x: 0, y: 0 });
+  const leadX = useRef(0);
+  const leadZ = useRef(0);
 
-  const { playing, avatarVariant } = useGame();
+  const { playing, avatarVariant, cameraMode } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
 
   useEffect(() => {
@@ -285,6 +287,34 @@ export function Avatar() {
     motion.current.jumping = jumping.current;
     motion.current.speed = moved ? speed : 0;
 
+    // normalized horizontal movement direction (for camera modes)
+    let mdx = 0;
+    let mdz = 0;
+    if (moved) {
+      const ml = Math.hypot(tmpMove.current.x, tmpMove.current.z) || 1;
+      mdx = tmpMove.current.x / ml;
+      mdz = tmpMove.current.z / ml;
+    }
+
+    // SWING BEHIND ("behind"/"both"): ease the camera yaw toward sitting behind
+    // the heading, so forward always goes into the screen. Suppressed while the
+    // user is manually dragging.
+    if ((cameraMode === "behind" || cameraMode === "both") && moved && !drag.current) {
+      const desiredYaw = Math.atan2(-mdx, -mdz);
+      let dyaw = desiredYaw - yawT.current;
+      dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw)); // shortest path
+      yawT.current += dyaw * Math.min(1, d * 2.6);
+    }
+
+    // LEAD ("lead"/"both"): glide a look-ahead offset toward the movement
+    // direction so you see more of where you're going; returns to 0 when idle.
+    const leadOn = (cameraMode === "lead" || cameraMode === "both") && moved;
+    const LEAD = 2.6;
+    const tgX = leadOn ? mdx * LEAD : 0;
+    const tgZ = leadOn ? mdz * LEAD : 0;
+    leadX.current += (tgX - leadX.current) * Math.min(1, d * 3);
+    leadZ.current += (tgZ - leadZ.current) * Math.min(1, d * 3);
+
     // follow camera tracks the GROUND height so jumps read as real lift
     const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
     const ease = Math.min(1, d * 12);
@@ -293,12 +323,14 @@ export function Avatar() {
     dist.current += (distT.current - dist.current) * Math.min(1, d * 10);
     const cp = pitch.current;
     const r = dist.current;
+    const fx = avatarPos.x + leadX.current;
+    const fz = avatarPos.z + leadZ.current;
     camera.position.set(
-      avatarPos.x + Math.sin(yaw.current) * Math.cos(cp) * r,
+      fx + Math.sin(yaw.current) * Math.cos(cp) * r,
       camBaseY + Math.sin(cp) * r + 1.0,
-      avatarPos.z + Math.cos(yaw.current) * Math.cos(cp) * r,
+      fz + Math.cos(yaw.current) * Math.cos(cp) * r,
     );
-    const target = tmpTarget.current.set(avatarPos.x, camBaseY + 1.1, avatarPos.z);
+    const target = tmpTarget.current.set(fx, camBaseY + 1.1, fz);
     camera.lookAt(target);
 
     guideTimer.current += d;

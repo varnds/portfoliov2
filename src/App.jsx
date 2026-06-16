@@ -62,6 +62,7 @@ import { PlayButton } from "./game/PlayButton";
 import { RevealCard } from "./game/RevealCard";
 import { WelcomeCard, ContextHint } from "./game/PlayHints";
 import { AvatarSwitcher } from "./game/AvatarSwitcher";
+import { CameraSwitcher } from "./game/CameraSwitcher";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3401,6 +3402,7 @@ export default function App() {
           )}
           {scene3D && introComplete && <PlayButton visible={scene3D && introComplete} />}
           {scene3D && introComplete && <AvatarSwitcher visible={scene3D && introComplete} />}
+          {scene3D && introComplete && <CameraSwitcher visible={scene3D && introComplete} />}
           {scene3D && introComplete && <WelcomeCard />}
           {scene3D && introComplete && <ContextHint />}
           <RevealCard />

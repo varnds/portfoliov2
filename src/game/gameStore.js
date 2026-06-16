@@ -38,6 +38,7 @@ let state = {
   welcomeSeen: false, // welcome card dismissed
   nearTarget: null, // { id, buried } — the discoverable you're standing by
   avatarVariant: DEFAULT_AVATAR, // one of the ids in avatarConfig AVATARS
+  cameraMode: "behind", // "behind" | "lead" | "both" | "free"
 };
 
 const listeners = new Set();
@@ -71,6 +72,12 @@ export function startGame() {
 export function setAvatarVariant(v) {
   if (state.avatarVariant === v) return;
   state = { ...state, avatarVariant: v };
+  emit();
+}
+
+export function setCameraMode(m) {
+  if (state.cameraMode === m) return;
+  state = { ...state, cameraMode: m };
   emit();
 }
 
