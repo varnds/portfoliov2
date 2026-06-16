@@ -174,6 +174,10 @@ export function Avatar() {
   const last = useRef({ x: 0, y: 0 });
   const leadX = useRef(0);
   const leadZ = useRef(0);
+  const headX = useRef(0); // smoothed heading (movement dir)
+  const headZ = useRef(1);
+  const focus = useRef(null); // smoothed camera focus point
+  const idle = useRef(0); // seconds since last movement
 
   const { playing, avatarVariant, cameraMode } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
@@ -183,6 +187,8 @@ export function Avatar() {
     avatarPos.copy(SPAWN);
     dropping.current = true;
     jumping.current = false;
+    focus.current = null; // re-center the camera focus on spawn
+    idle.current = 0;
     setLanded(false);
     const MOVE_KEYS = new Set([
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space",
@@ -253,22 +259,34 @@ export function Avatar() {
       const k = keys.current;
       running = !!(k.ShiftLeft || k.ShiftRight);
       speed = running ? RUN_SPEED : WALK_SPEED;
-      const fwd = tmpFwd.current;
-      camera.getWorldDirection(fwd);
-      fwd.y = 0;
-      if (fwd.lengthSq() > 1e-6) fwd.normalize();
-      const right = tmpRight.current.crossVectors(fwd, camera.up).normalize();
-      const move = tmpMove.current.set(0, 0, 0);
-      if (k.KeyW || k.ArrowUp) move.add(fwd);
-      if (k.KeyS || k.ArrowDown) move.sub(fwd);
-      if (k.KeyD || k.ArrowRight) move.add(right);
-      if (k.KeyA || k.ArrowLeft) move.sub(right);
-      if (move.lengthSq() > 0) {
+      // Movement basis from the SMOOTHED orbit yaw (single source of truth) — NOT
+      // camera.getWorldDirection. This is one-way (yaw → basis), so movement never
+      // rotates the camera: a held key holds a fixed world direction (no curve).
+      const cy = yaw.current;
+      const fwdX = -Math.sin(cy);
+      const fwdZ = -Math.cos(cy);
+      const rgtX = Math.cos(cy);
+      const rgtZ = -Math.sin(cy);
+      let ix = 0;
+      let iz = 0;
+      if (k.KeyW || k.ArrowUp) { ix += fwdX; iz += fwdZ; }
+      if (k.KeyS || k.ArrowDown) { ix -= fwdX; iz -= fwdZ; }
+      if (k.KeyD || k.ArrowRight) { ix += rgtX; iz += rgtZ; }
+      if (k.KeyA || k.ArrowLeft) { ix -= rgtX; iz -= rgtZ; }
+      const il = Math.hypot(ix, iz);
+      if (il > 0) {
         moved = true;
-        move.normalize().multiplyScalar(speed * d);
-        avatarPos.x += move.x;
-        avatarPos.z += move.z;
-        ref.current.rotation.y = Math.atan2(move.x, move.z);
+        ix /= il;
+        iz /= il;
+        avatarPos.x += ix * speed * d;
+        avatarPos.z += iz * speed * d;
+        // smooth the heading, then ease the avatar's facing toward it
+        headX.current = THREE.MathUtils.damp(headX.current, ix, 8, dt);
+        headZ.current = THREE.MathUtils.damp(headZ.current, iz, 8, dt);
+        const tf = Math.atan2(headX.current, headZ.current);
+        let df = tf - ref.current.rotation.y;
+        df = Math.atan2(Math.sin(df), Math.cos(df));
+        ref.current.rotation.y += df * (1 - Math.exp(-12 * dt));
       }
       let y = terrainHeight(avatarPos.x, avatarPos.z);
       if (jumping.current) {
@@ -287,51 +305,53 @@ export function Avatar() {
     motion.current.jumping = jumping.current;
     motion.current.speed = moved ? speed : 0;
 
-    // normalized horizontal movement direction (for camera modes)
-    let mdx = 0;
-    let mdz = 0;
-    if (moved) {
-      const ml = Math.hypot(tmpMove.current.x, tmpMove.current.z) || 1;
-      mdx = tmpMove.current.x / ml;
-      mdz = tmpMove.current.z / ml;
-    }
+    idle.current = moved ? 0 : idle.current + dt;
+    const hl = Math.hypot(headX.current, headZ.current) || 1;
+    const shx = headX.current / hl;
+    const shz = headZ.current / hl;
 
-    // SWING BEHIND ("behind"/"both"): ease the camera yaw toward sitting behind
-    // the heading, so forward always goes into the screen. Suppressed while the
-    // user is manually dragging.
-    if ((cameraMode === "behind" || cameraMode === "both") && moved && !drag.current) {
-      const desiredYaw = Math.atan2(-mdx, -mdz);
-      let dyaw = desiredYaw - yawT.current;
-      dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw)); // shortest path
-      yawT.current += dyaw * Math.min(1, d * 2.6);
+    // ── Camera ────────────────────────────────────────────────────────────────
+    // Yaw target: drag target by default; in behind/both, once you STOP moving,
+    // slowly swing to sit behind your last heading (chase-cam) — never during
+    // movement, so there's no feedback/curl.
+    let targetYaw = yawT.current;
+    let yawLambda = 9;
+    if ((cameraMode === "behind" || cameraMode === "both") && !drag.current && idle.current > 0.18) {
+      targetYaw = Math.atan2(-shx, -shz);
+      yawT.current = targetYaw; // keep manual target in sync for seamless drag
+      yawLambda = 2.2; // slow, gentle settle
     }
+    let dy = targetYaw - yaw.current;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    yaw.current += dy * (1 - Math.exp(-yawLambda * dt));
+    pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
+    dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
-    // LEAD ("lead"/"both"): glide a look-ahead offset toward the movement
-    // direction so you see more of where you're going; returns to 0 when idle.
+    // Lead look-ahead (lead/both) from the SMOOTHED heading; eases to 0 when idle.
     const leadOn = (cameraMode === "lead" || cameraMode === "both") && moved;
     const LEAD = 2.6;
-    const tgX = leadOn ? mdx * LEAD : 0;
-    const tgZ = leadOn ? mdz * LEAD : 0;
-    leadX.current += (tgX - leadX.current) * Math.min(1, d * 3);
-    leadZ.current += (tgZ - leadZ.current) * Math.min(1, d * 3);
+    leadX.current = THREE.MathUtils.damp(leadX.current, leadOn ? shx * LEAD : 0, 2.5, dt);
+    leadZ.current = THREE.MathUtils.damp(leadZ.current, leadOn ? shz * LEAD : 0, 2.5, dt);
 
-    // follow camera tracks the GROUND height so jumps read as real lift
+    // Damp a FOCUS point toward (avatar + lead) so avatar micro-jitter / terrain
+    // steps don't snap the camera. Track GROUND height so jumps read as lift.
     const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
-    const ease = Math.min(1, d * 12);
-    yaw.current += (yawT.current - yaw.current) * ease;
-    pitch.current += (pitchT.current - pitch.current) * ease;
-    dist.current += (distT.current - dist.current) * Math.min(1, d * 10);
+    const goalX = avatarPos.x + leadX.current;
+    const goalZ = avatarPos.z + leadZ.current;
+    if (!focus.current) focus.current = { x: goalX, y: camBaseY, z: goalZ };
+    const f = focus.current;
+    f.x = THREE.MathUtils.damp(f.x, goalX, 9, dt);
+    f.z = THREE.MathUtils.damp(f.z, goalZ, 9, dt);
+    f.y = THREE.MathUtils.damp(f.y, camBaseY, 7, dt);
+
     const cp = pitch.current;
     const r = dist.current;
-    const fx = avatarPos.x + leadX.current;
-    const fz = avatarPos.z + leadZ.current;
     camera.position.set(
-      fx + Math.sin(yaw.current) * Math.cos(cp) * r,
-      camBaseY + Math.sin(cp) * r + 1.0,
-      fz + Math.cos(yaw.current) * Math.cos(cp) * r,
+      f.x + Math.sin(yaw.current) * Math.cos(cp) * r,
+      f.y + Math.sin(cp) * r + 1.0,
+      f.z + Math.cos(yaw.current) * Math.cos(cp) * r,
     );
-    const target = tmpTarget.current.set(fx, camBaseY + 1.1, fz);
-    camera.lookAt(target);
+    camera.lookAt(tmpTarget.current.set(f.x, f.y + 1.1, f.z));
 
     guideTimer.current += d;
     if (guideTimer.current > 0.4) {
