@@ -9,19 +9,25 @@ export const TERRAIN_HALF_D = 100;
 // Pond placement (recovered from the discovery-era scene). Used by Water/PondLife.
 export const POND_X = -15;
 export const POND_Z = 16;
-export const POND_RADIUS = 11;
+export const POND_RADIUS = 13;
 
 // Organic pond outline: the edge radius varies by angle (sum of low-freq sines)
 // so the pond reads as a natural lobed pool, not a perfect circle. Shared by the
 // water surface, shore band, rock placement AND the terrain basin carve so they
 // all follow the same shape.
+//
+// The dip amplitudes are kept modest (≈0.75×–1.25× radius) so the pool stays a
+// FULL connected body: with deeper dips the outline pinched into thin tongues and
+// the un-carved terrain between lobes poked up through the surface, making lobes
+// read as separate teal patches stranded on the sand. Shallower dips + a larger
+// base radius keep every lobe joined to the main pool.
 export function pondEdgeRadius(angle) {
   return (
     POND_RADIUS *
     (1 +
-      0.22 * Math.sin(angle * 2 + 0.6) +
-      0.13 * Math.sin(angle * 3 - 1.3) +
-      0.07 * Math.sin(angle * 5 + 2.4))
+      0.13 * Math.sin(angle * 2 + 0.6) +
+      0.08 * Math.sin(angle * 3 - 1.3) +
+      0.04 * Math.sin(angle * 5 + 2.4))
   );
 }
 
