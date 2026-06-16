@@ -13,6 +13,7 @@ import { Foliage } from "./Foliage";
 import { LandmarkTree } from "./LandmarkTree";
 import { PondRipples } from "./PondRipples";
 import { GlbScenery } from "./GlbScenery";
+import { SkyDrama } from "./SkyDrama";
 import { AutumnLeaves, AutumnMotes, DriftingClouds } from "./Atmosphere";
 import {
   ClotheslinePost,
@@ -30,6 +31,11 @@ import {
 const LEFT_POST = postLayout(70, 470, 130, 0);
 const RIGHT_POST = postLayout(970, 470, 130, 0);
 const LINE = clotheslineEnds(LEFT_POST, RIGHT_POST);
+
+// Camp-tent tint per season (the bird's deep rust-orange by default).
+const TENT_TINT = {
+  winter: "#C2410C", night: "#C2410C", spring: "#FF6FA0", summer: "#13B0A6", autumn: "#34A6CE",
+};
 
 // Ring of distant GLB mountains framing the horizon (winter).
 const MOUNTAIN_RING = [
@@ -73,6 +79,18 @@ export function SceneEnvironment({
       <Terrain palette={palette} />
       <Water seasonKey={seasonKey} palette={palette} />
       <PondRipples seasonKey={seasonKey} palette={palette} />
+      <SkyDrama seasonKey={seasonKey} palette={palette} />
+      {/* Camp tent on the far side of the lake */}
+      <GlbScenery
+        url="/models/low_poly_camp__tent_house.glb"
+        mode="full"
+        position={[7, 0, 19]}
+        rotationY={Math.PI}
+        targetSize={7}
+        tint={TENT_TINT[seasonKey] || "#C2410C"}
+        tintStrength={0.58}
+        tintReplace={seasonKey === "spring" || seasonKey === "summer" || seasonKey === "autumn"}
+      />
       <Foliage seasonKey={seasonKey} palette={palette} />
       <LandmarkTree seasonKey={seasonKey} palette={palette} />
 
