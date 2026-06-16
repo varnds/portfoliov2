@@ -118,11 +118,14 @@ export function createFabricMaterial(fill, map, accentHex) {
   return new THREE.MeshPhysicalMaterial({
     color: fill,
     map,
-    roughness: 0.84,
+    // Soft matte cloth: high roughness, no metalness, faint fabric sheen. The
+    // garment is now a thin single-sided draping sheet, so render both faces.
+    roughness: 0.95,
     metalness: 0,
-    sheen: 0.52,
-    sheenRoughness: 0.72,
+    sheen: 0.4,
+    sheenRoughness: 0.85,
     sheenColor: sheen,
+    side: THREE.DoubleSide,
   });
 }
 
