@@ -45,6 +45,22 @@ export function terrainHeight(x, z) {
   const yard = Math.exp(-((x * x) / 90 + ((z - 0.5) * (z - 0.5)) / 10));
   h = h * (1 - yard * 0.92) + YARD * (yard * 0.92);
 
+  // Pond basin: carve a smooth bowl so the water nestles in a real depression
+  // with sloped banks (only partly visible — a thing to find) instead of sitting
+  // on the surface as a flat disc. An origin guard keeps the clothesline yard level.
+  const pdx = x - POND_X;
+  const pdz = z - POND_Z;
+  const basinR = POND_RADIUS * 1.55;
+  const pd = Math.sqrt(pdx * pdx + pdz * pdz);
+  if (pd < basinR) {
+    const r = Math.sqrt(x * x + z * z);
+    let bowl = Math.cos((pd / basinR) * Math.PI * 0.5);
+    bowl = bowl * bowl; // smooth 1→0, flat slope at the rim
+    const og = Math.min(Math.max((r - 10) / 7, 0), 1);
+    const guard = og * og * (3 - 2 * og); // smoothstep: 0 within r10, 1 beyond r17
+    h -= 1.1 * bowl * guard; // sink the dish so the banks hide most of the water
+  }
+
   return h;
 }
 

@@ -84,9 +84,9 @@ export function SceneEnvironment({
       <GlbScenery
         url="/models/low_poly_camp__tent_house.glb"
         mode="full"
-        position={[-26, 0, 22]}
-        rotationY={Math.PI * 0.78}
-        targetSize={8}
+        position={[14, 0, 10]}
+        rotationY={Math.PI * 0.62}
+        targetSize={7}
         tint={TENT_TINT[seasonKey] || "#C2410C"}
         tintStrength={0.58}
         tintReplace={seasonKey === "spring" || seasonKey === "summer" || seasonKey === "autumn"}
