@@ -46,7 +46,10 @@ const SUN_OFFSET = 0.32; // fraction of POND_RADIUS toward the sun side
 // way so the water has a real waterline with banks sloping up out of it (the
 // disc edge tucks under the banks instead of sitting proud as a flat circle).
 function computeWaterY() {
-  return terrainHeight(POND_X, POND_Z) + 0.45;
+  // Fill the (now deeper, 1.6) basin most of the way: a higher waterline means
+  // more open water and submerges any rolling-hill ridge that used to poke
+  // through the shallow surface and split the pool into separate patches.
+  return terrainHeight(POND_X, POND_Z) + 0.95;
 }
 
 const WATER_Y = computeWaterY();

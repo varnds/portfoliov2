@@ -7,8 +7,8 @@ export const TERRAIN_HALF_W = 110;
 export const TERRAIN_HALF_D = 100;
 
 // Pond placement (recovered from the discovery-era scene). Used by Water/PondLife.
-export const POND_X = -15;
-export const POND_Z = 16;
+export const POND_X = -18;
+export const POND_Z = 19;
 export const POND_RADIUS = 13;
 
 // Organic pond outline: the edge radius varies by angle (sum of low-freq sines)
@@ -80,7 +80,8 @@ export function terrainHeight(x, z) {
     bowl = bowl * bowl; // smooth 1→0, flat slope at the rim
     const og = Math.min(Math.max((r - 10) / 7, 0), 1);
     const guard = og * og * (3 - 2 * og); // smoothstep: 0 within r10, 1 beyond r17
-    h -= 1.1 * bowl * guard; // sink the dish so the banks hide most of the water
+    h -= 1.6 * bowl * guard; // deep dish: keeps the whole pool below the surface so
+                             // rolling-hill ridges don't poke through and split it
   }
 
   return h;
