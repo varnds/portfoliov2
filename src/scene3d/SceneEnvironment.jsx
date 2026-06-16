@@ -5,6 +5,8 @@ import {
   lineFraction,
   postLayout,
   SUN_POSITION,
+  POND_X,
+  POND_Z,
 } from "./coords";
 import { GarmentMesh } from "./GarmentMesh";
 import { Terrain } from "./Terrain";
@@ -31,6 +33,10 @@ import {
 const LEFT_POST = postLayout(70, 470, 130, 0);
 const RIGHT_POST = postLayout(970, 470, 130, 0);
 const LINE = clotheslineEnds(LEFT_POST, RIGHT_POST);
+
+// Lake toggle — the procedural Water is kept in the codebase but hidden; the
+// little-pond GLB stands in for it instead.
+const SHOW_WATER = false;
 
 // Camp-tent tint per season (the bird's deep rust-orange by default).
 const TENT_TINT = {
@@ -77,8 +83,17 @@ export function SceneEnvironment({
   return (
     <group>
       <Terrain palette={palette} />
-      <Water seasonKey={seasonKey} palette={palette} />
-      <PondRipples seasonKey={seasonKey} palette={palette} />
+      {/* Lake kept in code but HIDDEN — replaced by the little-pond GLB below. */}
+      {SHOW_WATER && <Water seasonKey={seasonKey} palette={palette} />}
+      {SHOW_WATER && <PondRipples seasonKey={seasonKey} palette={palette} />}
+      {/* Little pond (with fish) GLB nestled into the carved basin. */}
+      <GlbScenery
+        url="/models/little_pond__fish.glb"
+        mode="full"
+        position={[POND_X, 0, POND_Z]}
+        targetSize={24}
+        yOffset={-0.2}
+      />
       <SkyDrama seasonKey={seasonKey} palette={palette} />
       {/* Camp tent on the far side of the lake */}
       <GlbScenery
