@@ -2,15 +2,36 @@
  * LakeGrass — scatters small grass-tuft GLBs around the pond's organic shoreline.
  * Placement follows pondEdgeRadius(angle) so the grass hugs the irregular
  * waterline, with seeded jitter and small per-tuft scale ("not too big").
+ *
+ * The grass_brush.glb ships with an alpha-MASKED ("MASK", alphaCutoff ~0.456)
+ * material whose visibility lives entirely in a baseColor alpha texture (a grass
+ * "card"). With the default white baseColorFactor and that cutout, the tufts
+ * render invisible. On top of that, the model's tall axis is local +Z, and the
+ * GLB's two SceneRoot matrices cancel out — so the tuft lies FLAT on the ground
+ * (tall axis = world Z) instead of standing up.
+ *
+ * Fix (local to LakeGrass so other GlbScenery callers are untouched): load the
+ * GLB ourselves, override the mesh material with a simple flat low-poly green
+ * MeshStandardMaterial (no alpha mask), rotate the tuft upright (Z->Y), then
+ * recenter / scale / ground exactly like GlbScenery so placement still works.
  */
 import React, { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
-import { GlbScenery } from "./GlbScenery";
-import { POND_X, POND_Z, pondEdgeRadius } from "./coords";
+import * as THREE from "three";
+import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
 import { seededRng } from "./particleUtils";
 
 const URL = "/models/grass_brush.glb";
 const COUNT = 24;
+
+// Pleasant low-poly grass green, double-sided so thin blades read from any angle.
+const GRASS_MAT = new THREE.MeshStandardMaterial({
+  color: "#6FA84B",
+  flatShading: true,
+  roughness: 0.9,
+  metalness: 0,
+  side: THREE.DoubleSide,
+});
 
 function buildPlacements() {
   const out = [];
@@ -24,12 +45,63 @@ function buildPlacements() {
       key: i,
       x: POND_X + Math.cos(angle) * r,
       z: POND_Z + Math.sin(angle) * r,
-      // footprint target (GlbScenery scales by max(x,z) span) — small clumps
-      targetSize: 1.0 + seededRng(i * 23 + 9) * 0.5, // 1.0–1.5
+      // small, clearly-visible tufts: ~1.2–2.2 units tall
+      targetHeight: 1.2 + seededRng(i * 23 + 9) * 1.0,
       rotationY: seededRng(i * 31 + 3) * Math.PI * 2,
     });
   }
   return out;
+}
+
+function GrassTuft({ x, z, targetHeight, rotationY }) {
+  const { scene } = useGLTF(URL);
+
+  const model = useMemo(() => {
+    const c = scene.clone(true);
+
+    // Override the alpha-masked grass-card material with a solid green so the
+    // tufts actually draw. Keep shadows.
+    c.traverse((o) => {
+      if (o.isMesh) {
+        o.material = GRASS_MAT;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+
+    // Stand the tuft upright: the GLB's tall axis is local +Z and the root
+    // matrices cancel, so rotate -90° about X to bring +Z up into world +Y.
+    // (+90° points it DOWN, which left the base floating in the air.)
+    c.rotation.x = -Math.PI / 2;
+    c.updateWorldMatrix(true, true);
+
+    // Recenter on the footprint base and ground at y=0 (in the wrapper group),
+    // mirroring GlbScenery, then scale to the desired height.
+    const box = new THREE.Box3();
+    const tmp = new THREE.Box3();
+    c.traverse((o) => {
+      if (o.isMesh && o.visible) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+        box.union(tmp);
+      }
+    });
+    if (box.isEmpty()) return c;
+
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    c.position.set(-center.x, -box.min.y, -center.z);
+
+    const g = new THREE.Group();
+    g.add(c);
+    // Scale so the tuft stands ~targetHeight units tall (small but visible).
+    g.scale.setScalar(targetHeight / Math.max(size.y, 0.001));
+    return g;
+  }, [scene, targetHeight]);
+
+  // Ground on the bank, sunk a touch so the base tucks into the slope (no float).
+  const y = terrainHeight(x, z) - 0.2;
+  return <primitive object={model} position={[x, y, z]} rotation={[0, rotationY, 0]} />;
 }
 
 export function LakeGrass() {
@@ -37,14 +109,12 @@ export function LakeGrass() {
   return (
     <group name="lake-grass">
       {items.map((it) => (
-        <GlbScenery
+        <GrassTuft
           key={it.key}
-          url={URL}
-          mode="full"
-          position={[it.x, 0, it.z]}
-          targetSize={it.targetSize}
+          x={it.x}
+          z={it.z}
+          targetHeight={it.targetHeight}
           rotationY={it.rotationY}
-          yOffset={-0.08}
         />
       ))}
     </group>

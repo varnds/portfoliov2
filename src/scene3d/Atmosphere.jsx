@@ -303,19 +303,23 @@ function CloudPuff() {
   );
 }
 
-export function DriftingClouds({ count = 9, speed = 0.5 }) {
-  const spanX = 70;
+export function DriftingClouds({ count = 22, speed = 0.5 }) {
+  const spanX = 90;
+  const spanZ = 90;
   const clouds = useMemo(() => {
     const rng = (n) => {
       const s = Math.sin(n * 12.9898) * 43758.5453;
       return s - Math.floor(s);
     };
+    // Spread across the FULL sky dome — every direction (x and z, front & back)
+    // and a higher, varied altitude band so clouds sit overhead across the whole
+    // map, not just in one horizontal strip behind the scene.
     return Array.from({ length: count }, (_, i) => ({
       x: (rng(i + 1) * 2 - 1) * spanX,
-      y: 8.5 + rng(i + 9) * 6,
-      z: -10 - rng(i + 17) * 42,
-      scale: 1.2 + rng(i + 5) * 1.3,
-      sp: 0.6 + rng(i + 3) * 0.9,
+      y: 13 + rng(i + 9) * 20, // 13–33, higher up and varied → overhead coverage
+      z: (rng(i + 17) * 2 - 1) * spanZ, // both behind AND in front of the camera
+      scale: 1.1 + rng(i + 5) * 1.6,
+      sp: 0.5 + rng(i + 3) * 0.9,
     }));
   }, [count]);
 

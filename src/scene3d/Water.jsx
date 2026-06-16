@@ -23,8 +23,24 @@ import { seededRng, makeRadialTexture } from "./particleUtils";
 // from) so the water fills the bowl exactly.
 
 const SHORE_WIDTH = 2.4;    // extra band of shore geometry around the disc
-const RADIAL_SEGS = 26;     // segments around the circle (low-poly look)
-const RING_SEGS = 5;        // concentric rings inside the disc
+const RADIAL_SEGS = 26;     // segments around the circle (low-poly look) — shore uses this
+const WATER_RADIAL_SEGS = 64; // finer resolution for the water surface so ripples read smooth
+const RING_SEGS = 14;       // concentric rings inside the disc (denser → smoother waves)
+
+// Sun / sky-light direction projected onto the water plane. The bright glancing
+// reflection ("sun glitter path") is elongated along this axis so it reads like
+// a real reflection of the low desert sun rather than a centred coin.
+const SUN_DIR = new THREE.Vector2(0.55, -0.82).normalize();
+
+// Rotation (about the plane normal) that aligns the glitter texture's long axis
+// with SUN_DIR. The reflection plane is laid flat (rotation.x = -PI/2); after
+// that, its local +Y maps to world -Z, so we rotate so the streak runs along
+// SUN_DIR in the X/Z plane.
+const REFL_ANGLE = Math.atan2(SUN_DIR.x, -SUN_DIR.y);
+
+// The sun sits low on one side, so its reflection (and the strongest sky sheen)
+// falls on the side of the pond toward the sun. Offset both highlights that way.
+const SUN_OFFSET = 0.32; // fraction of POND_RADIUS toward the sun side
 
 // The terrain is carved into a ~1.9-deep bowl at the pond centre. Fill it part
 // way so the water has a real waterline with banks sloping up out of it (the
@@ -114,6 +130,62 @@ function buildSkyEnvMap(season) {
   return tex;
 }
 
+/**
+ * Soft "sun glitter" reflection texture — a vertically-elongated, feathered
+ * smear with a few broken horizontal streaks, NOT a hard radial coin. Drawn into
+ * a tall canvas so when mapped onto a plane that we stretch along the sun axis it
+ * reads as the broken reflection of the sky/sun on rippling water.
+ */
+function buildSunGlitterTexture() {
+  const W = 64, H = 256;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+
+  // Base soft elongated glow (an ellipse much taller than wide, feathered out).
+  const cx = W / 2;
+  const cy = H / 2;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.5);
+  grad.addColorStop(0, "rgba(255,255,255,0.9)");
+  grad.addColorStop(0.4, "rgba(255,255,255,0.45)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.save();
+  // Stretch the radial along Y to make the long reflection path.
+  ctx.translate(cx, cy);
+  ctx.scale(1, H / W * 0.9);
+  ctx.translate(-cx, -cy);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // Broken horizontal streaks (the glittering ripple breakup) fading toward ends.
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 22; i++) {
+    const t = i / 21;
+    const y = t * H;
+    // Stronger near the centre of the path, faint at the ends.
+    const edgeFade = Math.sin(t * Math.PI);
+    const wob = Math.sin(i * 1.7) * 0.5 + 0.5;
+    const halfW = (4 + wob * 16) * edgeFade;
+    const alpha = 0.10 + wob * 0.18 * edgeFade;
+    if (halfW <= 0) continue;
+    const g = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(0.5, `rgba(255,255,255,${alpha.toFixed(3)})`);
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - halfW, y - 1.2, halfW * 2, 2.4);
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // ─── geometry builders ────────────────────────────────────────────────────────
 
 /**
@@ -130,10 +202,12 @@ function buildWaterGeometry() {
 
   // Concentric rings — each ring's radius follows the organic pond outline
   // (pondEdgeRadius) scaled inward, so the whole pool is an irregular lobed shape.
+  // Rings are spaced with a slight ease so there are more of them toward the rim
+  // (where the glancing sky sheen falls off fastest and needs resolution).
   for (let r = 1; r <= RING_SEGS; r++) {
     const frac = r / RING_SEGS;
-    for (let s = 0; s < RADIAL_SEGS; s++) {
-      const angle = (s / RADIAL_SEGS) * Math.PI * 2;
+    for (let s = 0; s < WATER_RADIAL_SEGS; s++) {
+      const angle = (s / WATER_RADIAL_SEGS) * Math.PI * 2;
       const radius = pondEdgeRadius(angle) * frac;
       const vx = POND_X + Math.cos(angle) * radius;
       const vz = POND_Z + Math.sin(angle) * radius;
@@ -142,21 +216,21 @@ function buildWaterGeometry() {
   }
 
   // Fan from centre to first ring
-  for (let s = 0; s < RADIAL_SEGS; s++) {
+  for (let s = 0; s < WATER_RADIAL_SEGS; s++) {
     const a = 1 + s;
-    const b = 1 + ((s + 1) % RADIAL_SEGS);
+    const b = 1 + ((s + 1) % WATER_RADIAL_SEGS);
     indices.push(0, a, b);
   }
 
   // Quads between rings
   for (let r = 0; r < RING_SEGS - 1; r++) {
-    const innerBase = 1 + r * RADIAL_SEGS;
-    const outerBase = 1 + (r + 1) * RADIAL_SEGS;
-    for (let s = 0; s < RADIAL_SEGS; s++) {
+    const innerBase = 1 + r * WATER_RADIAL_SEGS;
+    const outerBase = 1 + (r + 1) * WATER_RADIAL_SEGS;
+    for (let s = 0; s < WATER_RADIAL_SEGS; s++) {
       const i0 = innerBase + s;
-      const i1 = innerBase + ((s + 1) % RADIAL_SEGS);
+      const i1 = innerBase + ((s + 1) % WATER_RADIAL_SEGS);
       const o0 = outerBase + s;
-      const o1 = outerBase + ((s + 1) % RADIAL_SEGS);
+      const o1 = outerBase + ((s + 1) % WATER_RADIAL_SEGS);
       indices.push(i0, o0, i1);
       indices.push(i1, o0, o1);
     }
@@ -401,10 +475,19 @@ export function Water({ seasonKey, palette }) {
   const envMap = useMemo(() => buildSkyEnvMap(season), [season]);
   useEffect(() => () => envMap.dispose(), [envMap]);
 
-  // Small CIRCULAR sun/sky reflection glow that sits fully inside the pond.
-  const reflTex = useMemo(() => makeRadialTexture(1, 0.5, 0), []);
+  // Soft elongated "sun glitter" reflection along the sun axis (replaces the old
+  // hard centred coin). Lives on a plane stretched along SUN_DIR.
+  const reflTex = useMemo(() => buildSunGlitterTexture(), []);
   useEffect(() => () => reflTex.dispose(), [reflTex]);
   const reflRef = useRef();
+  const reflMatRef = useRef();
+
+  // Fresnel sky-sheen patch: a brighter, larger soft glow concentrated toward the
+  // FAR rim (grazing angle, where real water reflects the sky most). Additive,
+  // very soft, tinted with the season sky colour.
+  const sheenTex = useMemo(() => makeRadialTexture(1, 0.55, 0), []);
+  useEffect(() => () => sheenTex.dispose(), [sheenTex]);
+  const sheenRef = useRef();
 
   // Store original vertex Y positions for ripple animation
   const origPositions = useMemo(() => {
@@ -433,14 +516,23 @@ export function Water({ seasonKey, palette }) {
         const wz = origPos.getZ(i);
         const dx = wx - POND_X;
         const dz = wz - POND_Z;
-        // Concentric ripple + slight directional drift
         const dist = Math.sqrt(dx * dx + dz * dz);
-        // Smooth, mostly-concentric ripples expanding outward (two gentle
-        // frequencies) + a faint cross-swell so it doesn't look perfectly radial.
+
+        // Richer water motion: a couple of gentle concentric swells expanding
+        // outward at different scales/speeds, PLUS two directional wave trains
+        // travelling across the pond at an angle to each other. Summing several
+        // octaves of unequal wavelength breaks the single-ring look into
+        // believable, slowly-drifting water.
         const wave =
-          Math.sin(dist * 0.85 - t * rippleSpeed * 2.4) * rippleAmp * 0.7 +
-          Math.sin(dist * 1.7 - t * rippleSpeed * 1.5) * rippleAmp * 0.35 +
-          Math.sin((dx + dz) * 0.4 + t * rippleSpeed * 1.1) * rippleAmp * 0.18;
+          // concentric swells
+          Math.sin(dist * 0.7 - t * rippleSpeed * 2.0) * rippleAmp * 0.42 +
+          Math.sin(dist * 1.45 - t * rippleSpeed * 3.1) * rippleAmp * 0.24 +
+          // directional train A
+          Math.sin((dx * 0.62 + dz * 0.78) * 1.05 + t * rippleSpeed * 1.7) * rippleAmp * 0.30 +
+          // directional train B (crosses A) — finer, faster chop
+          Math.sin((dx * -0.80 + dz * 0.59) * 1.9 + t * rippleSpeed * 2.6) * rippleAmp * 0.18 +
+          // tiny high-frequency detail so light catches small facets
+          Math.sin((dx * 1.3 - dz * 0.9) * 2.7 - t * rippleSpeed * 3.4) * rippleAmp * 0.09;
         pos.setY(i, origPositions[i] + wave);
       }
       pos.needsUpdate = true;
@@ -453,11 +545,20 @@ export function Water({ seasonKey, palette }) {
         0.14 + Math.sin(t * rippleSpeed * 4.2 + 1.3) * 0.1;
     }
 
-    // Circular reflection: faint breathing glow
+    // Sun-glitter reflection: gentle shimmer in brightness + a slight length
+    // breathing along the sun axis, plus a slow sway so the streaks live.
+    if (reflMatRef.current) {
+      reflMatRef.current.opacity = 0.22 + Math.sin(t * rippleSpeed * 3.4) * 0.07;
+    }
     if (reflRef.current) {
-      reflRef.current.material.opacity = 0.16 + Math.sin(t * rippleSpeed * 2.0) * 0.06;
-      const s = 1 + Math.sin(t * rippleSpeed * 1.3 + 0.7) * 0.05;
-      reflRef.current.scale.set(s, s, s);
+      const stretch = 1 + Math.sin(t * rippleSpeed * 1.6 + 0.7) * 0.05;
+      reflRef.current.scale.y = stretch;
+      reflRef.current.rotation.z = REFL_ANGLE + Math.sin(t * rippleSpeed * 0.8) * 0.04;
+    }
+
+    // Fresnel sky-sheen on the far rim: very slow breathing.
+    if (sheenRef.current) {
+      sheenRef.current.material.opacity = 0.18 + Math.sin(t * rippleSpeed * 1.4 + 2.0) * 0.05;
     }
   });
 
@@ -480,28 +581,65 @@ export function Water({ seasonKey, palette }) {
           emissiveIntensity={isFrozen ? 0 : 0.06}
           transparent={!isFrozen}
           opacity={cfg.opacity}
-          roughness={isFrozen ? cfg.roughness : 0.5}
-          metalness={isFrozen ? 0.2 : 0.08}
+          // Liquid water: low roughness so the envMap sky reads as a soft sheen
+          // (not a flat patch), modest metalness so it's reflective but not a
+          // mirror. Winter keeps its frosted-ice look.
+          roughness={isFrozen ? cfg.roughness : cfg.roughness}
+          metalness={isFrozen ? 0.2 : cfg.metalness}
           envMap={envMap}
-          envMapIntensity={isFrozen ? 0.9 : 0.3}
+          envMapIntensity={isFrozen ? 0.9 : 0.55}
           side={THREE.DoubleSide}
         />
       </mesh>
 
-      {/* Small circular sky/sun reflection — a neat round glow, fully inside the
-          pond (radius < the pool's minimum edge radius so it never clips). */}
+      {/* Fresnel-style sky sheen: a broad, very soft additive glow biased to the
+          far (sun-side) rim, where grazing-angle reflection of the sky is
+          strongest on real water. Large and feathered so it integrates with the
+          surface instead of reading as a hard disc. */}
+      {!isFrozen && (
+        <mesh
+          ref={sheenRef}
+          position={[
+            POND_X + SUN_DIR.x * POND_RADIUS * SUN_OFFSET * 1.4,
+            WATER_Y + 0.02,
+            POND_Z + SUN_DIR.y * POND_RADIUS * SUN_OFFSET * 1.4,
+          ]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <circleGeometry args={[POND_RADIUS * 0.92, 48]} />
+          <meshBasicMaterial
+            map={sheenTex}
+            color={cfg.glintColor}
+            transparent
+            opacity={0.18}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
+
+      {/* Sun-glitter reflection path: a soft, elongated, broken highlight that
+          runs along the sun direction across the water — the integrated
+          reflection of the low sun, replacing the old centred coin. */}
       {!isFrozen && (
         <mesh
           ref={reflRef}
-          position={[POND_X, WATER_Y + 0.03, POND_Z]}
-          rotation={[-Math.PI / 2, 0, 0]}
+          position={[
+            POND_X + SUN_DIR.x * POND_RADIUS * SUN_OFFSET,
+            WATER_Y + 0.04,
+            POND_Z + SUN_DIR.y * POND_RADIUS * SUN_OFFSET,
+          ]}
+          rotation={[-Math.PI / 2, 0, REFL_ANGLE]}
         >
-          <circleGeometry args={[POND_RADIUS * 0.34, 40]} />
+          {/* Plane: narrow in X, long in Y (the streak runs down Y, which we
+              align to the sun axis via REFL_ANGLE). */}
+          <planeGeometry args={[POND_RADIUS * 0.55, POND_RADIUS * 1.25]} />
           <meshBasicMaterial
+            ref={reflMatRef}
             map={reflTex}
             color={cfg.glintColor}
             transparent
-            opacity={0.2}
+            opacity={0.24}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
           />
