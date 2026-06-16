@@ -17,15 +17,15 @@ function buildPlacements() {
   for (let i = 0; i < COUNT; i += 1) {
     const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.42;
     const edge = pondEdgeRadius(angle);
-    // sit right at the waterline out to just onto the bank
-    const radialFrac = 1.0 + seededRng(i * 7 + 2) * 0.16;
+    // sit on the bank just OUTSIDE the waterline (so it's on land, not submerged)
+    const radialFrac = 1.12 + seededRng(i * 7 + 2) * 0.24; // 1.12–1.36 × edge
     const r = edge * radialFrac;
     out.push({
       key: i,
       x: POND_X + Math.cos(angle) * r,
       z: POND_Z + Math.sin(angle) * r,
-      // footprint target (GlbScenery scales by max(x,z) span) — kept small
-      targetSize: 0.6 + seededRng(i * 23 + 9) * 0.4, // 0.6–1.0
+      // footprint target (GlbScenery scales by max(x,z) span) — small clumps
+      targetSize: 1.0 + seededRng(i * 23 + 9) * 0.5, // 1.0–1.5
       rotationY: seededRng(i * 31 + 3) * Math.PI * 2,
     });
   }

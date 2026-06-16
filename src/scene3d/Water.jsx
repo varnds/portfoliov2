@@ -42,7 +42,7 @@ const SEASON_CONFIG = {
     color: new THREE.Color("#5EC4A8"),
     opacity: 0.72,
     rippleSpeed: 0.55,
-    rippleAmp: 0.042,
+    rippleAmp: 0.085,
     glintColor: new THREE.Color("#ADFFD8"),
     roughness: 0.18,
     metalness: 0.35,
@@ -51,7 +51,7 @@ const SEASON_CONFIG = {
     color: new THREE.Color("#2AA8C4"),
     opacity: 0.75,
     rippleSpeed: 0.65,
-    rippleAmp: 0.048,
+    rippleAmp: 0.095,
     glintColor: new THREE.Color("#B8F0FF"),
     roughness: 0.14,
     metalness: 0.42,
@@ -60,7 +60,7 @@ const SEASON_CONFIG = {
     color: new THREE.Color("#4A7A90"),
     opacity: 0.78,
     rippleSpeed: 0.28,
-    rippleAmp: 0.026,
+    rippleAmp: 0.06,
     glintColor: new THREE.Color("#8AB0BE"),
     roughness: 0.3,
     metalness: 0.25,
@@ -79,7 +79,7 @@ const SEASON_CONFIG = {
     color: new THREE.Color("#1A2E55"),
     opacity: 0.88,
     rippleSpeed: 0.18,
-    rippleAmp: 0.022,
+    rippleAmp: 0.05,
     glintColor: new THREE.Color("#6088C8"),
     roughness: 0.08,
     metalness: 0.6,
@@ -435,26 +435,27 @@ export function Water({ seasonKey, palette }) {
         const dz = wz - POND_Z;
         // Concentric ripple + slight directional drift
         const dist = Math.sqrt(dx * dx + dz * dz);
+        // Smooth, mostly-concentric ripples expanding outward (two gentle
+        // frequencies) + a faint cross-swell so it doesn't look perfectly radial.
         const wave =
-          Math.sin(dist * 1.1 - t * rippleSpeed * 3.5) * rippleAmp * 0.6 +
-          Math.sin(dx * 0.45 + t * rippleSpeed * 2.1) * rippleAmp * 0.25 +
-          Math.cos(dz * 0.52 - t * rippleSpeed * 1.8) * rippleAmp * 0.25;
+          Math.sin(dist * 0.85 - t * rippleSpeed * 2.4) * rippleAmp * 0.7 +
+          Math.sin(dist * 1.7 - t * rippleSpeed * 1.5) * rippleAmp * 0.35 +
+          Math.sin((dx + dz) * 0.4 + t * rippleSpeed * 1.1) * rippleAmp * 0.18;
         pos.setY(i, origPositions[i] + wave);
       }
       pos.needsUpdate = true;
       waterMeshRef.current.geometry.computeVertexNormals();
     }
 
-    // Glint opacity pulse
+    // Glint opacity pulse (subtle — a few faint sparkles, not a shiny sheet)
     if (glintRef.current) {
       glintRef.current.material.opacity =
-        0.35 + Math.sin(t * rippleSpeed * 4.2 + 1.3) * 0.25;
+        0.14 + Math.sin(t * rippleSpeed * 4.2 + 1.3) * 0.1;
     }
 
-    // Circular reflection: gentle breathing + faint scale shimmer
+    // Circular reflection: faint breathing glow
     if (reflRef.current) {
-      const p = 0.5 + Math.sin(t * rippleSpeed * 2.0) * 0.12;
-      reflRef.current.material.opacity = p;
+      reflRef.current.material.opacity = 0.16 + Math.sin(t * rippleSpeed * 2.0) * 0.06;
       const s = 1 + Math.sin(t * rippleSpeed * 1.3 + 0.7) * 0.05;
       reflRef.current.scale.set(s, s, s);
     }
@@ -479,10 +480,10 @@ export function Water({ seasonKey, palette }) {
           emissiveIntensity={isFrozen ? 0 : 0.06}
           transparent={!isFrozen}
           opacity={cfg.opacity}
-          roughness={isFrozen ? cfg.roughness : 0.22}
-          metalness={isFrozen ? 0.2 : 0.3}
+          roughness={isFrozen ? cfg.roughness : 0.5}
+          metalness={isFrozen ? 0.2 : 0.08}
           envMap={envMap}
-          envMapIntensity={isFrozen ? 0.9 : 0.7}
+          envMapIntensity={isFrozen ? 0.9 : 0.3}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -495,12 +496,12 @@ export function Water({ seasonKey, palette }) {
           position={[POND_X, WATER_Y + 0.03, POND_Z]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
-          <circleGeometry args={[POND_RADIUS * 0.4, 40]} />
+          <circleGeometry args={[POND_RADIUS * 0.34, 40]} />
           <meshBasicMaterial
             map={reflTex}
             color={cfg.glintColor}
             transparent
-            opacity={0.55}
+            opacity={0.2}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
           />
