@@ -5,6 +5,16 @@ import React, { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Discoverable } from "../Discoverable";
+import { terrainHeight, POND_X, POND_Z } from "../../scene3d/coords";
+
+// Float the bottle ON the pond surface. The Discoverable grounds its group to
+// terrainHeight at (BX,BZ) (the carved basin floor, underwater); WATER_Y is the
+// rendered water plane (terrainHeight at pond centre + 0.45). FLOAT_BASE lifts
+// the bottle from that floor up to the waterline so it bobs on the surface.
+const BX = POND_X;
+const BZ = POND_Z + 2; // a touch toward the visible front of the pond
+const WATER_Y = terrainHeight(POND_X, POND_Z) + 0.45;
+const FLOAT_BASE = WATER_Y - terrainHeight(BX, BZ);
 
 export function MessageBottle() {
   const groupRef = useRef();
@@ -16,15 +26,15 @@ export function MessageBottle() {
     const g = groupRef.current;
     if (!g) return;
     const t = state.clock.elapsedTime;
-    // Gentle bob + lazy roll as if nudged by water.
-    g.position.y = 0.18 + Math.sin(t * 1.1) * 0.04;
-    g.rotation.y = Math.sin(t * 0.5) * 0.12;
+    // Gentle bob + lazy roll as if floating, nudged by the water.
+    g.position.y = FLOAT_BASE + Math.sin(t * 1.1) * 0.05;
+    g.rotation.y = Math.sin(t * 0.5) * 0.16;
   });
 
   return (
     <Discoverable
       id="bottle"
-      position={[4, 0, 12]}
+      position={[BX, 0, BZ]}
       radius={5}
       reveal={{
         title: "A message I'd send myself",

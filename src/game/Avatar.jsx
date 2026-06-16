@@ -182,14 +182,17 @@ export function Avatar() {
     dropping.current = true;
     jumping.current = false;
     setLanded(false);
+    const MOVE_KEYS = new Set([
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space",
+    ]);
     const down = (e) => {
       keys.current[e.code] = true;
-      if (e.code === "Space") {
-        e.preventDefault();
-        if (!dropping.current && !jumping.current) {
-          jumping.current = true;
-          jumpT.current = 0;
-        }
+      // Stop the browser from scrolling the page on arrows/space (which would
+      // steal the keypress and make movement feel broken).
+      if (MOVE_KEYS.has(e.code)) e.preventDefault();
+      if (e.code === "Space" && !dropping.current && !jumping.current) {
+        jumping.current = true;
+        jumpT.current = 0;
       }
     };
     const up = (e) => { keys.current[e.code] = false; };
