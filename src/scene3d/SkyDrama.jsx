@@ -138,7 +138,7 @@ function SummerBalloons() {
       const radius = 30 + rNorm * 50; // 30..80
       const x = Math.sin(azimuth) * radius;
       const z = Math.cos(azimuth) * radius;
-      const y = 16 + (1 - rNorm) * 22 + rng(i * 11 + 2) * 5; // near→~43 high, far→~16
+      const y = 13 + (1 - rNorm) * 17 + rng(i * 11 + 2) * 4; // near→~30, far→~13 — sits in the upper sky band, not clipped
       return {
         position: [x, y, z],
         driftX: (i % 2 === 0 ? 1 : -1) * (0.18 + rng(i * 13 + 4) * 0.16),
@@ -151,10 +151,34 @@ function SummerBalloons() {
     });
   }, []);
 
+  // A few balloons placed in the forward sky arc at a height that sits in the
+  // entry-camera's (near-level) sky band, so balloons read immediately in the
+  // default landing view — not only when you orbit upward.
+  const featured = useMemo(() => {
+    const spots = [
+      { x: -26, y: 9, z: -28 },
+      { x: -12, y: 11, z: -34 },
+      { x: 10, y: 10, z: -30 },
+      { x: 27, y: 8, z: -24 },
+    ];
+    return spots.map((s, i) => ({
+      position: [s.x, s.y, s.z],
+      driftX: (i % 2 === 0 ? 1 : -1) * (0.16 + rng(i * 3 + 21) * 0.14),
+      bobAmp: 0.5 + rng(i * 5 + 22) * 0.3,
+      bobSpeed: 0.22 + rng(i * 7 + 23) * 0.18,
+      scale: 1.25 + rng(i * 4 + 24) * 0.4,
+      seed: (i + 1) % 4,
+      wrapX: [-(Math.abs(s.x) + 55), Math.abs(s.x) + 55],
+    }));
+  }, []);
+
   return (
     <>
       {balloons.map((b, i) => (
         <HotAirBalloon key={i} {...b} />
+      ))}
+      {featured.map((b, i) => (
+        <HotAirBalloon key={`f${i}`} {...b} />
       ))}
     </>
   );
