@@ -88,16 +88,15 @@ export function SceneEnvironment({
       {SHOW_WATER && <PondRipples seasonKey={seasonKey} palette={palette} />}
       {SHOW_WATER && <LakeGrass />}
       <SkyDrama seasonKey={seasonKey} palette={palette} />
-      {/* Camp tent on the far side of the lake */}
+      {/* Camp tent on the far side of the lake. Natural texture (no flat tint):
+          the old teal/blue season tint flat-coloured the roof and read as a stray
+          "lake" patch on the sand far from the pond. */}
       <GlbScenery
         url="/models/low_poly_camp__tent_house.glb"
         mode="full"
         position={[14, 0, 10]}
         rotationY={Math.PI * 0.62}
         targetSize={7}
-        tint={TENT_TINT[seasonKey] || "#C2410C"}
-        tintStrength={0.58}
-        tintReplace={seasonKey === "spring" || seasonKey === "summer" || seasonKey === "autumn"}
         hideNames="floor"
       />
       <Foliage seasonKey={seasonKey} palette={palette} />
