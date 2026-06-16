@@ -1,13 +1,18 @@
 /**
- * Avatar — the explorable character for play mode. Drops in from the sky on
- * start, walks on the terrain via WASD / arrows (follow camera), and JUMPS with
- * Space. The selected model comes from the gameStore (avatarVariant) and the
- * roster in avatarConfig. Animation clips are matched by NAME (idle/walk/run/
- * jump) because clip names differ per model; some models have no clips at all
- * (they just slide / hop). Position lives in gameStore (avatarPos) so
- * Discoverables can measure proximity.
+ * Avatar — the explorable character for play mode. Drops in from the sky, walks
+ * on the terrain via WASD / arrows (hold Shift to run), and JUMPS with Space.
+ *
+ * Split in two so animations rebind correctly when the model is switched:
+ *   • Avatar       — owns movement, position (avatarPos), jump, follow camera.
+ *                    Writes per-frame intent into a `motion` ref (no re-renders).
+ *   • AvatarModel  — owns the GLB + mixer; REMOUNTED on variant change via
+ *                    key={avatarVariant} so useAnimations binds to the fresh
+ *                    skeleton every switch. Reads `motion` to drive the clips.
+ *
+ * Clip names vary per model, so clips are matched by name (idle/walk/run/jump).
+ * Models with no clips (chicken, banana) get a procedural bob/hop instead.
  */
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -18,16 +23,14 @@ import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
-const SPEED = 11;
+const WALK_SPEED = 3.4;
+const RUN_SPEED = 7.6;
+const WALK_REF = 3.0; // ground speed the walk clips are authored for
+const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
-const JUMP_DUR = 0.66; // seconds
-const JUMP_H = 1.7; // peak height (world units)
+const JUMP_DUR = 0.66;
+const JUMP_H = 1.7;
 
-/**
- * Pick the best-matching clip name. `includes` is tried in priority order;
- * a clip whose LAST "|"-segment equals the token wins first, then any substring
- * match, skipping anything containing an `excludes` token. Returns null if none.
- */
 function pickClip(names, includes, excludes = []) {
   if (!names || !names.length) return null;
   const rows = names.map((n) => ({ n, l: n.toLowerCase(), last: n.toLowerCase().split("|").pop() }));
@@ -43,38 +46,16 @@ function pickClip(names, includes, excludes = []) {
   return null;
 }
 
-export function Avatar() {
-  const { camera, gl } = useThree();
-  const ref = useRef();
-  const keys = useRef({});
-  const dropping = useRef(true);
-  const guideTimer = useRef(0);
-  const tmpFwd = useRef(new THREE.Vector3());
-  const tmpRight = useRef(new THREE.Vector3());
-  const tmpMove = useRef(new THREE.Vector3());
-  const tmpTarget = useRef(new THREE.Vector3());
-  // jump state
-  const jumping = useRef(false);
-  const jumpT = useRef(0);
-  // Orbit follow camera (drag to look, wheel to zoom) — damped toward targets.
-  const yaw = useRef(0);
-  const pitch = useRef(0.38);
-  const dist = useRef(8.5);
-  const yawT = useRef(0);
-  const pitchT = useRef(0.38);
-  const distT = useRef(8.5);
-  const drag = useRef(false);
-  const last = useRef({ x: 0, y: 0 });
-
-  const { playing, avatarVariant } = useGame();
-  const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
-
-  const { scene, animations } = useGLTF(cfg.url);
+/**
+ * The model + animation mixer. Remounted per variant (key) so the mixer always
+ * binds to the current skeleton. Driven by the parent's `motion` ref.
+ */
+function AvatarModel({ cfg, motion }) {
   const rigRef = useRef();
+  const { scene, animations } = useGLTF(cfg.url);
   const { actions, names } = useAnimations(animations, rigRef);
   const curAction = useRef(null);
 
-  // Resolve the clip names for this model.
   const clips = useMemo(
     () => ({
       idle: pickClip(names, ["idle"], ["idle_", "idle."]),
@@ -84,8 +65,8 @@ export function Avatar() {
     }),
     [names],
   );
+  const hasClips = !!(names && names.length);
 
-  // Build the model: recenter feet to y=0, centered in x/z, scaled to target.
   const rig = useMemo(() => {
     const obj = skeletonClone(scene);
     obj.rotation.set(0, 0, 0);
@@ -107,9 +88,9 @@ export function Avatar() {
     return { obj, scale };
   }, [scene, cfg]);
 
-  // Play idle once playing / model ready.
+  // Start on idle.
   useEffect(() => {
-    if (!playing || !actions) return;
+    if (!actions) return;
     const start = clips.idle || clips.walk || (names && names[0]);
     const a = start && actions[start];
     if (a) {
@@ -117,9 +98,84 @@ export function Avatar() {
       curAction.current = start;
     }
     return () => Object.values(actions).forEach((x) => x && x.stop());
-  }, [actions, clips, names, playing]);
+  }, [actions, clips, names]);
 
-  // Spawn + key handlers (Space = jump).
+  useFrame((state, dt) => {
+    const d = Math.min(dt, 0.05);
+    const { moving, running, jumping, speed } = motion.current;
+
+    if (hasClips && actions) {
+      let want;
+      if (jumping && clips.jump) want = clips.jump;
+      else if (moving) want = running ? clips.run || clips.walk : clips.walk || clips.run;
+      else want = clips.idle;
+      if (want && want !== curAction.current) {
+        if (curAction.current && actions[curAction.current]) actions[curAction.current].fadeOut(0.18);
+        const nx = actions[want];
+        if (nx) {
+          nx.reset();
+          nx.setEffectiveWeight(1);
+          nx.fadeIn(0.18).play();
+        }
+        curAction.current = want;
+      }
+      // sync locomotion playback to ground speed (no foot-sliding)
+      const cur = curAction.current && actions[curAction.current];
+      if (cur) {
+        if (want === clips.walk || want === clips.run) {
+          const ref = want === clips.run ? RUN_REF : WALK_REF;
+          cur.setEffectiveTimeScale(THREE.MathUtils.clamp(speed / ref, 0.6, 1.7));
+        } else {
+          cur.setEffectiveTimeScale(1);
+        }
+      }
+      if (rigRef.current) rigRef.current.position.y = 0;
+    } else if (rigRef.current) {
+      // procedural fallback for clipless models (chicken, banana)
+      const t = state.clock.elapsedTime;
+      if (moving) {
+        rigRef.current.position.y = Math.abs(Math.sin(t * (running ? 13 : 9))) * 0.12;
+        rigRef.current.rotation.x = -0.1;
+      } else {
+        rigRef.current.position.y = Math.sin(t * 2) * 0.03;
+        rigRef.current.rotation.x = 0;
+      }
+    }
+  });
+
+  return (
+    <group ref={rigRef} scale={rig.scale}>
+      <primitive object={rig.obj} />
+    </group>
+  );
+}
+
+export function Avatar() {
+  const { camera, gl } = useThree();
+  const ref = useRef();
+  const keys = useRef({});
+  const dropping = useRef(true);
+  const guideTimer = useRef(0);
+  const jumping = useRef(false);
+  const jumpT = useRef(0);
+  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0 });
+  const tmpFwd = useRef(new THREE.Vector3());
+  const tmpRight = useRef(new THREE.Vector3());
+  const tmpMove = useRef(new THREE.Vector3());
+  const tmpTarget = useRef(new THREE.Vector3());
+  // orbit follow camera
+  const yaw = useRef(0);
+  const pitch = useRef(0.38);
+  const dist = useRef(8.5);
+  const yawT = useRef(0);
+  const pitchT = useRef(0.38);
+  const distT = useRef(8.5);
+  const drag = useRef(false);
+  const last = useRef({ x: 0, y: 0 });
+
+  const { playing, avatarVariant } = useGame();
+  const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
+
   useEffect(() => {
     if (!playing) return;
     avatarPos.copy(SPAWN);
@@ -145,7 +201,6 @@ export function Avatar() {
     };
   }, [playing]);
 
-  // Drag-to-orbit + wheel-zoom.
   useEffect(() => {
     if (!playing) return;
     const el = gl.domElement;
@@ -179,6 +234,8 @@ export function Avatar() {
     const d = Math.min(dt, 0.05);
     const groundY = terrainHeight(avatarPos.x, avatarPos.z);
     let moved = false;
+    let running = false;
+    let speed = 0;
 
     if (dropping.current) {
       avatarPos.y += (groundY - avatarPos.y) * Math.min(1, d * 3.2);
@@ -189,6 +246,8 @@ export function Avatar() {
       }
     } else {
       const k = keys.current;
+      running = !!(k.ShiftLeft || k.ShiftRight);
+      speed = running ? RUN_SPEED : WALK_SPEED;
       const fwd = tmpFwd.current;
       camera.getWorldDirection(fwd);
       fwd.y = 0;
@@ -201,47 +260,29 @@ export function Avatar() {
       if (k.KeyA || k.ArrowLeft) move.sub(right);
       if (move.lengthSq() > 0) {
         moved = true;
-        move.normalize().multiplyScalar(SPEED * d);
+        move.normalize().multiplyScalar(speed * d);
         avatarPos.x += move.x;
         avatarPos.z += move.z;
         ref.current.rotation.y = Math.atan2(move.x, move.z);
       }
-      // grounded height + jump arc on top
       let y = terrainHeight(avatarPos.x, avatarPos.z);
       if (jumping.current) {
         jumpT.current += d;
         const t = jumpT.current / JUMP_DUR;
-        if (t >= 1) {
-          jumping.current = false;
-        } else {
-          y += JUMP_H * 4 * t * (1 - t); // parabola, peak at t=0.5
-        }
+        if (t >= 1) jumping.current = false;
+        else y += JUMP_H * 4 * t * (1 - t);
       }
       avatarPos.y = y;
     }
     ref.current.position.copy(avatarPos);
 
-    // animation state machine: jump > walk/run > idle
-    if (actions) {
-      let want;
-      if (jumping.current && clips.jump) want = clips.jump;
-      else if (moved) want = clips.walk || clips.run;
-      else want = clips.idle;
-      if (want && want !== curAction.current) {
-        if (curAction.current && actions[curAction.current]) actions[curAction.current].fadeOut(0.15);
-        const nx = actions[want];
-        if (nx) {
-          nx.reset();
-          nx.setEffectiveWeight(1);
-          nx.setEffectiveTimeScale(1);
-          nx.fadeIn(0.15).play();
-        }
-        curAction.current = want;
-      }
-    }
+    // hand intent to the model (read in AvatarModel's useFrame)
+    motion.current.moving = moved;
+    motion.current.running = running;
+    motion.current.jumping = jumping.current;
+    motion.current.speed = moved ? speed : 0;
 
-    // damped orbit follow camera. Track the GROUND height (not the jump arc) so a
-    // jump visibly lifts the avatar instead of moving the whole frame with it.
+    // follow camera tracks the GROUND height so jumps read as real lift
     const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
     const ease = Math.min(1, d * 12);
     yaw.current += (yawT.current - yaw.current) * ease;
@@ -267,9 +308,9 @@ export function Avatar() {
   if (!playing) return null;
   return (
     <group ref={ref}>
-      <group ref={rigRef} scale={rig.scale}>
-        <primitive object={rig.obj} />
-      </group>
+      <Suspense fallback={null}>
+        <AvatarModel key={avatarVariant} cfg={cfg} motion={motion} />
+      </Suspense>
     </group>
   );
 }
