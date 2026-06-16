@@ -15,7 +15,6 @@ import { Foliage } from "./Foliage";
 import { LandmarkTree } from "./LandmarkTree";
 import { PondRipples } from "./PondRipples";
 import { GlbScenery } from "./GlbScenery";
-import { PondGlb } from "./PondGlb";
 import { SkyDrama } from "./SkyDrama";
 import { AutumnLeaves, AutumnMotes, DriftingClouds } from "./Atmosphere";
 import {
@@ -35,9 +34,8 @@ const LEFT_POST = postLayout(70, 470, 130, 0);
 const RIGHT_POST = postLayout(970, 470, 130, 0);
 const LINE = clotheslineEnds(LEFT_POST, RIGHT_POST);
 
-// Lake toggle — the procedural Water is kept in the codebase but hidden; the
-// little-pond GLB stands in for it instead.
-const SHOW_WATER = false;
+// Lake toggle — the original procedural Water lake (restored).
+const SHOW_WATER = true;
 
 // Camp-tent tint per season (the bird's deep rust-orange by default).
 const TENT_TINT = {
@@ -87,11 +85,6 @@ export function SceneEnvironment({
       {/* Lake kept in code but HIDDEN — replaced by the little-pond GLB below. */}
       {SHOW_WATER && <Water seasonKey={seasonKey} palette={palette} />}
       {SHOW_WATER && <PondRipples seasonKey={seasonKey} palette={palette} />}
-      {/* Little pond (with fish), ANIMATED + BURIED: the tall tub walls sink
-          below grade (water flush at yOffset -2.53 for targetSize 14; walls
-          ~4.66 below the water) so only the water + grass rim show, and the
-          baked clip plays (water pulse + swimming fish). */}
-      <PondGlb position={[POND_X, 0, POND_Z]} targetSize={14} yOffset={-2.4} />
       <SkyDrama seasonKey={seasonKey} palette={palette} />
       {/* Camp tent on the far side of the lake */}
       <GlbScenery
