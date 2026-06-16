@@ -1,27 +1,28 @@
 /**
- * LakeGrass — small low-poly grass tufts scattered around the pond's organic
- * shoreline (placement follows pondEdgeRadius(angle)).
+ * LakeGrass — small PROCEDURAL grass tufts ringing the pond's visible waterline.
  *
- * NOTE: this used to instance grass_brush.glb, but that model's geometry made
- * grounding unreliable (its bounding box didn't correspond to the visible blade
- * base, so the tufts floated no matter how they were offset). Replaced with
- * PROCEDURAL blades whose bases sit at local y=0 — so a single static
- * `position={[x, terrainHeight(x,z), z]}` grounds them exactly like the shore
- * rocks, which are known to sit correctly on the ground.
+ * Showcase mode: four distinct grass styles, one per angular SECTOR around the
+ * lake, so you can roam the shoreline and compare them, then pick one:
+ *   Sector 0 (East ~+X)   → "Fan"    — flat tapered blades fanning out
+ *   Sector 1 (North ~+Z)  → "Spikes" — thin upright spiky reeds (cones)
+ *   Sector 2 (West ~−X)   → "Clump"  — low mossy mound with a few blades
+ *   Sector 3 (South ~−Z)  → "Wispy"  — many thin tall near-vertical blades
+ *
+ * All geometry is rooted at local y=0 and each tuft renders at
+ * position=[x, terrainHeight(x,z), z] — identical grounding to the shore rocks,
+ * so the grass sits ON the ground (no floating).
  */
 import React, { useMemo } from "react";
 import * as THREE from "three";
 import { POND_X, POND_Z, pondEdgeRadius, terrainHeight } from "./coords";
 import { seededRng } from "./particleUtils";
 
-const COUNT = 40;
+const COUNT = 56;
 
-// A single grass blade: a thin tapered shape standing on its base (y=0 → up).
-// Built once and shared; per-blade transforms vary the look.
+// Shared tapered-blade geometry (base at y=0, tip at y=1), used by Fan + Wispy.
 const BLADE_GEO = (() => {
-  // tapered quad: wide at base, narrow at tip, with a slight forward bend baked in
-  const w = 0.5; // base half-width (scaled down per-tuft)
-  const h = 1.0; // unit height (scaled per-tuft)
+  const w = 0.5;
+  const h = 1.0;
   const g = new THREE.BufferGeometry();
   const verts = new Float32Array([
     -w, 0, 0, w, 0, 0, -w * 0.5, h * 0.55, 0.05,
@@ -33,60 +34,134 @@ const BLADE_GEO = (() => {
   return g;
 })();
 
-const GRASS_MATS = [
+const MATS = [
   new THREE.MeshStandardMaterial({ color: "#6FA84B", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
   new THREE.MeshStandardMaterial({ color: "#7CB85A", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
   new THREE.MeshStandardMaterial({ color: "#5E9440", flatShading: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
 ];
+const m = (i) => MATS[i % MATS.length];
 
 function buildPlacements() {
   const out = [];
   for (let i = 0; i < COUNT; i += 1) {
-    const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.5;
+    const angle = (i / COUNT) * Math.PI * 2 + (seededRng(i * 13 + 5) - 0.5) * 0.22;
     const edge = pondEdgeRadius(angle);
-    const radialFrac = 1.06 + seededRng(i * 7 + 2) * 0.3; // 1.06–1.36 × edge (on the bank)
+    const radialFrac = 1.0 + seededRng(i * 7 + 2) * 0.12; // hug the waterline
     const r = edge * radialFrac;
+    // sector 0..3 by angle → which grass type
+    const norm = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const type = Math.floor((norm / (Math.PI * 2)) * 4) % 4;
     out.push({
       key: i,
       x: POND_X + Math.cos(angle) * r,
       z: POND_Z + Math.sin(angle) * r,
-      height: 0.7 + seededRng(i * 23 + 9) * 0.7, // 0.7–1.4 tall — small tufts
+      height: 0.35 + seededRng(i * 23 + 9) * 0.35, // small
       rotationY: seededRng(i * 31 + 3) * Math.PI * 2,
       seed: i,
+      type,
     });
   }
   return out;
 }
 
-/** A tuft = a fan of blades, all rooted at local y=0 (so the group grounds cleanly). */
-function GrassTuft({ x, z, height, rotationY, seed }) {
+/** Type 0 — Fan: flat tapered blades splaying outward. */
+function FanTuft({ height, seed }) {
   const blades = useMemo(() => {
-    const n = 5 + Math.floor(seededRng(seed * 3 + 1) * 3); // 5–7 blades
-    const arr = [];
-    for (let b = 0; b < n; b += 1) {
-      const a = (b / n) * Math.PI * 2 + seededRng(seed * 7 + b) * 0.6;
-      const spread = 0.12 + seededRng(seed * 5 + b) * 0.18; // splay outward
-      const bh = height * (0.7 + seededRng(seed * 11 + b) * 0.5);
-      const bw = 0.18 + seededRng(seed * 13 + b) * 0.12;
-      arr.push({
-        rotY: a,
-        // tilt outward from vertical so blades fan; base stays at y=0
-        tilt: spread + seededRng(seed * 17 + b) * 0.15,
-        scale: [bw, bh, bw],
-        mat: GRASS_MATS[b % GRASS_MATS.length],
-      });
-    }
-    return arr;
+    const n = 5 + Math.floor(seededRng(seed * 3 + 1) * 3);
+    return Array.from({ length: n }, (_, b) => ({
+      rotY: (b / n) * Math.PI * 2 + seededRng(seed * 7 + b) * 0.6,
+      tilt: 0.18 + seededRng(seed * 17 + b) * 0.22,
+      scale: [0.1 + seededRng(seed * 13 + b) * 0.07, height * (0.7 + seededRng(seed * 11 + b) * 0.5), 0.1],
+      mat: b % 3,
+    }));
   }, [height, seed]);
+  return blades.map((bl, i) => (
+    <group key={i} rotation={[bl.tilt, bl.rotY, 0]}>
+      <mesh geometry={BLADE_GEO} scale={bl.scale} material={m(bl.mat)} castShadow receiveShadow />
+    </group>
+  ));
+}
 
-  // Base at local y=0 → grounds exactly like ShoreRocks via the static prop.
+/** Type 1 — Spikes: thin upright cones, like reedy spikes. */
+function SpikeTuft({ height, seed }) {
+  const spikes = useMemo(() => {
+    const n = 4 + Math.floor(seededRng(seed * 5 + 2) * 3);
+    return Array.from({ length: n }, (_, b) => {
+      const a = (b / n) * Math.PI * 2 + seededRng(seed * 9 + b) * 0.5;
+      const off = 0.04 + seededRng(seed * 6 + b) * 0.06;
+      const h = height * (0.9 + seededRng(seed * 11 + b) * 0.6);
+      const rad = 0.035 + seededRng(seed * 8 + b) * 0.025;
+      return { x: Math.cos(a) * off, z: Math.sin(a) * off, h, rad, tilt: seededRng(seed * 4 + b) * 0.18, mat: b % 3 };
+    });
+  }, [height, seed]);
+  return spikes.map((s, i) => (
+    <group key={i} position={[s.x, 0, s.z]} rotation={[s.tilt, 0, s.tilt * 0.5]}>
+      {/* cone base at y=0: cone is centered, so lift by h/2 */}
+      <mesh position={[0, s.h / 2, 0]} material={m(s.mat)} castShadow receiveShadow>
+        <coneGeometry args={[s.rad, s.h, 5]} />
+      </mesh>
+    </group>
+  ));
+}
+
+/** Type 2 — Clump: a low mossy mound (flattened icosahedron) with a few blades. */
+function ClumpTuft({ height, seed }) {
+  const blades = useMemo(() => {
+    const n = 3 + Math.floor(seededRng(seed * 5 + 4) * 3);
+    return Array.from({ length: n }, (_, b) => ({
+      rotY: (b / n) * Math.PI * 2 + seededRng(seed * 7 + b) * 0.8,
+      tilt: 0.12 + seededRng(seed * 17 + b) * 0.2,
+      scale: [0.08, height * (0.6 + seededRng(seed * 11 + b) * 0.4), 0.08],
+      mat: b % 3,
+    }));
+  }, [height, seed]);
+  const moundR = 0.26 + seededRng(seed * 3 + 7) * 0.12;
+  const flat = 0.45;
   return (
-    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotationY, 0]}>
+    <>
+      <mesh position={[0, moundR * flat * 0.6, 0]} scale={[1, flat, 1]} material={m(2)} castShadow receiveShadow>
+        <icosahedronGeometry args={[moundR, 0]} />
+      </mesh>
       {blades.map((bl, i) => (
-        <group key={i} rotation={[bl.tilt, bl.rotY, 0]}>
-          <mesh geometry={BLADE_GEO} scale={bl.scale} material={bl.mat} castShadow receiveShadow />
+        <group key={i} position={[0, moundR * flat * 0.6, 0]} rotation={[bl.tilt, bl.rotY, 0]}>
+          <mesh geometry={BLADE_GEO} scale={bl.scale} material={m(bl.mat)} castShadow receiveShadow />
         </group>
       ))}
+    </>
+  );
+}
+
+/** Type 3 — Wispy: many thin tall near-vertical blades. */
+function WispyTuft({ height, seed }) {
+  const blades = useMemo(() => {
+    const n = 7 + Math.floor(seededRng(seed * 5 + 3) * 4);
+    return Array.from({ length: n }, (_, b) => {
+      const a = seededRng(seed * 9 + b) * Math.PI * 2;
+      const off = seededRng(seed * 6 + b) * 0.08;
+      return {
+        x: Math.cos(a) * off,
+        z: Math.sin(a) * off,
+        rotY: seededRng(seed * 7 + b) * Math.PI * 2,
+        tilt: 0.05 + seededRng(seed * 17 + b) * 0.12, // near-vertical
+        scale: [0.055, height * (1.2 + seededRng(seed * 11 + b) * 0.8), 0.055],
+        mat: b % 3,
+      };
+    });
+  }, [height, seed]);
+  return blades.map((bl, i) => (
+    <group key={i} position={[bl.x, 0, bl.z]} rotation={[bl.tilt, bl.rotY, 0]}>
+      <mesh geometry={BLADE_GEO} scale={bl.scale} material={m(bl.mat)} castShadow receiveShadow />
+    </group>
+  ));
+}
+
+const TYPES = [FanTuft, SpikeTuft, ClumpTuft, WispyTuft];
+
+function GrassTuft({ x, z, height, rotationY, seed, type }) {
+  const Tuft = TYPES[type] || FanTuft;
+  return (
+    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotationY, 0]}>
+      <Tuft height={height} seed={seed} />
     </group>
   );
 }
