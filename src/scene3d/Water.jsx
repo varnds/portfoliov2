@@ -16,7 +16,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { terrainHeight, POND_X, POND_Z, POND_RADIUS, pondEdgeRadius } from "./coords";
-import { seededRng } from "./particleUtils";
+import { seededRng, makeRadialTexture } from "./particleUtils";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 // POND_X/Z/RADIUS come from coords.js (same values the terrain basin is carved
@@ -397,9 +397,14 @@ export function Water({ seasonKey, palette }) {
   const crackGeo = useMemo(() => buildIceCracks(), []);
   const glintGeo = useMemo(() => buildGlintGeometry(), []);
 
-  // Per-season sky env map for a full-surface reflection.
+  // Per-season sky env map for a soft full-surface reflection.
   const envMap = useMemo(() => buildSkyEnvMap(season), [season]);
   useEffect(() => () => envMap.dispose(), [envMap]);
+
+  // Small CIRCULAR sun/sky reflection glow that sits fully inside the pond.
+  const reflTex = useMemo(() => makeRadialTexture(1, 0.5, 0), []);
+  useEffect(() => () => reflTex.dispose(), [reflTex]);
+  const reflRef = useRef();
 
   // Store original vertex Y positions for ripple animation
   const origPositions = useMemo(() => {
@@ -445,6 +450,14 @@ export function Water({ seasonKey, palette }) {
       glintRef.current.material.opacity =
         0.35 + Math.sin(t * rippleSpeed * 4.2 + 1.3) * 0.25;
     }
+
+    // Circular reflection: gentle breathing + faint scale shimmer
+    if (reflRef.current) {
+      const p = 0.5 + Math.sin(t * rippleSpeed * 2.0) * 0.12;
+      reflRef.current.material.opacity = p;
+      const s = 1 + Math.sin(t * rippleSpeed * 1.3 + 0.7) * 0.05;
+      reflRef.current.scale.set(s, s, s);
+    }
   });
 
   return (
@@ -466,13 +479,33 @@ export function Water({ seasonKey, palette }) {
           emissiveIntensity={isFrozen ? 0 : 0.06}
           transparent={!isFrozen}
           opacity={cfg.opacity}
-          roughness={isFrozen ? cfg.roughness : 0.12}
-          metalness={isFrozen ? 0.2 : 0.62}
+          roughness={isFrozen ? cfg.roughness : 0.22}
+          metalness={isFrozen ? 0.2 : 0.3}
           envMap={envMap}
-          envMapIntensity={isFrozen ? 0.9 : 1.55}
+          envMapIntensity={isFrozen ? 0.9 : 0.7}
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Small circular sky/sun reflection — a neat round glow, fully inside the
+          pond (radius < the pool's minimum edge radius so it never clips). */}
+      {!isFrozen && (
+        <mesh
+          ref={reflRef}
+          position={[POND_X, WATER_Y + 0.03, POND_Z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <circleGeometry args={[POND_RADIUS * 0.4, 40]} />
+          <meshBasicMaterial
+            map={reflTex}
+            color={cfg.glintColor}
+            transparent
+            opacity={0.55}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
 
       {/* Winter ice crack lines */}
       {isFrozen && (
