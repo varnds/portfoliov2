@@ -103,10 +103,13 @@ function GrassTuft({ x, z, targetHeight, rotationY }) {
   // the tuft's base at local y=0, so a single static position prop grounds it.
   // The -0.1 tucks the base slightly into the sand. No imperative mutation, so
   // R3F re-renders can't desync the placement.
+  // The GLB's geometry extends below its visible blades (empty lower portion), so
+  // grounding the bbox base leaves the visible grass floating. Sink by a fraction
+  // of the tuft height so the VISIBLE blades meet the ground. (Verified visually.)
   return (
     <primitive
       object={model}
-      position={[x, terrainHeight(x, z) - 0.1, z]}
+      position={[x, terrainHeight(x, z) - 0.2 * targetHeight, z]}
       rotation={[0, rotationY, 0]}
     />
   );
