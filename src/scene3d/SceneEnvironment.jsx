@@ -15,6 +15,7 @@ import { Foliage } from "./Foliage";
 import { LandmarkTree } from "./LandmarkTree";
 import { PondRipples } from "./PondRipples";
 import { GlbScenery } from "./GlbScenery";
+import { PondGlb } from "./PondGlb";
 import { SkyDrama } from "./SkyDrama";
 import { AutumnLeaves, AutumnMotes, DriftingClouds } from "./Atmosphere";
 import {
@@ -86,18 +87,11 @@ export function SceneEnvironment({
       {/* Lake kept in code but HIDDEN — replaced by the little-pond GLB below. */}
       {SHOW_WATER && <Water seasonKey={seasonKey} palette={palette} />}
       {SHOW_WATER && <PondRipples seasonKey={seasonKey} palette={palette} />}
-      {/* Little pond (with fish) GLB, BURIED into the ground: the tall tub walls
-          sink below grade so only the water surface + grass rim/plants show.
-          Geometry-derived: water sits flush at yOffset = -2.53 for targetSize 14
-          (walls extend ~4.66 below the water). Slight upward nudge keeps the rim
-          just proud of the sand. See GlbScenery recenter+ground math. */}
-      <GlbScenery
-        url="/models/little_pond__fish.glb"
-        mode="full"
-        position={[POND_X, 0, POND_Z]}
-        targetSize={14}
-        yOffset={-2.4}
-      />
+      {/* Little pond (with fish), ANIMATED + BURIED: the tall tub walls sink
+          below grade (water flush at yOffset -2.53 for targetSize 14; walls
+          ~4.66 below the water) so only the water + grass rim show, and the
+          baked clip plays (water pulse + swimming fish). */}
+      <PondGlb position={[POND_X, 0, POND_Z]} targetSize={14} yOffset={-2.4} />
       <SkyDrama seasonKey={seasonKey} palette={palette} />
       {/* Camp tent on the far side of the lake */}
       <GlbScenery

@@ -7,8 +7,8 @@ export const TERRAIN_HALF_W = 110;
 export const TERRAIN_HALF_D = 100;
 
 // Pond placement (recovered from the discovery-era scene). Used by Water/PondLife.
-export const POND_X = -15;
-export const POND_Z = 16;
+export const POND_X = -9;
+export const POND_Z = 10;
 export const POND_RADIUS = 11;
 
 const YARD = -0.15;
