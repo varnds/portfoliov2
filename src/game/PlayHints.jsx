@@ -25,18 +25,23 @@ export function WelcomeCard() {
         inset: 0,
         zIndex: 9400,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        background: "rgba(20,12,8,0.30)",
+        // anchor the card LOW and keep the scrim light so your character (who
+        // drops in centre-screen) stays visible instead of hidden behind the card
+        paddingBottom: "8vh",
+        background: "rgba(20,12,8,0.14)",
+        pointerEvents: "none",
       }}
     >
       <div
         style={{
+          pointerEvents: "auto",
           maxWidth: 440,
           width: "86%",
           background: "#FFFDF7",
           borderRadius: 16,
-          padding: "30px 32px",
+          padding: "26px 32px",
           boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
           textAlign: "center",
         }}
