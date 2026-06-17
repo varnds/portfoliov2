@@ -57,7 +57,7 @@ export function WelcomeCard() {
             lineHeight: 1.8,
           }}
         >
-          <b>Move</b> WASD / arrows &nbsp;·&nbsp; <b>Look</b> drag<br />
+          <b>Move</b> arrow keys &nbsp;·&nbsp; <b>Look</b> drag<br />
           <b>Zoom</b> scroll &nbsp;·&nbsp; <b>Uncover</b> click the marker
         </div>
         <button
@@ -84,14 +84,15 @@ export function WelcomeCard() {
 }
 
 export function ContextHint() {
-  const { playing, welcomeSeen, landed, discovered, nearTarget, activeReveal } = useGame();
+  const { playing, welcomeSeen, landed, nearTarget, activeReveal } = useGame();
   if (!playing || !welcomeSeen || !landed || activeReveal) return null;
 
+  // No generic movement banner — it crowded the top of the screen (and was stale:
+  // movement is arrow-keys-only now). Only show a contextual prompt when you're
+  // actually standing by something to interact with.
   let text = null;
   if (nearTarget) {
     text = nearTarget.buried ? "⛏  Click the mound to dig it up" : "✦  Click the glowing marker to uncover";
-  } else if (discovered.size === 0) {
-    text = "WASD / arrows to move  ·  drag to look  ·  scroll to zoom";
   }
   if (!text) return null;
 
