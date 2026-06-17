@@ -268,88 +268,48 @@ export function WashHud() {
         </div>
       )}
 
-      {/* ── Contextual prompt + progress (bottom-center) ── */}
-      {prompt && phase !== "done" && (
+      {/* ── Wash/dry progress bar (bottom-center). The action prompt itself is now
+          the floating keycap shown in-world over the item (WashDay KeyPrompt). ── */}
+      {isHold && phase !== "done" && (
         <div
-          key={`prompt-${phase}-${isHold}`}
+          key={`prog-${phase}`}
           className="wash-anim"
           style={{
             position: "absolute",
-            bottom: 32,
+            bottom: 40,
             left: "50%",
             transform: "translateX(-50%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 12,
+            width: "min(260px, 70vw)",
+            height: 12,
+            borderRadius: 999,
+            background: "rgba(255,253,247,0.9)",
+            boxShadow: "0 4px 14px rgba(58,42,32,0.16)",
+            overflow: "hidden",
             animation: "washPromptIn 0.36s ease both",
           }}
         >
-          {isHold && (
-            <div
-              style={{
-                width: "min(260px, 70vw)",
-                height: 12,
-                borderRadius: 999,
-                background: "rgba(255,253,247,0.9)",
-                boxShadow: "0 4px 14px rgba(58,42,32,0.16)",
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${Math.round(progress * 100)}%`,
-                  background: ACCENT,
-                  borderRadius: 999,
-                  transition: "width 0.08s linear",
-                }}
-              />
-              <span
-                style={{
-                  position: "absolute",
-                  top: -18,
-                  right: 0,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: 2,
-                  color: SUBINK,
-                }}
-              >
-                {progressLabel} {Math.round(progress * 100)}%
-              </span>
-            </div>
-          )}
-
-          <button
-            className="wash-pill"
-            onPointerDown={isHold ? holdStart : undefined}
-            onPointerUp={isHold ? holdEnd : undefined}
-            onPointerLeave={isHold ? holdEnd : undefined}
-            onPointerCancel={isHold ? holdEnd : undefined}
-            onClick={isHold ? undefined : pressAction}
+          <div
             style={{
-              pointerEvents: "auto",
-              border: "none",
-              cursor: "pointer",
-              touchAction: "none",
-              userSelect: "none",
-              WebkitUserSelect: "none",
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: 1.5,
-              textTransform: "uppercase",
-              color: "#fff",
+              height: "100%",
+              width: `${Math.round(progress * 100)}%`,
               background: ACCENT,
               borderRadius: 999,
-              padding: "12px 22px",
-              boxShadow: "0 10px 26px rgba(226,114,91,0.34)",
+              transition: "width 0.08s linear",
+            }}
+          />
+          <span
+            style={{
+              position: "absolute",
+              top: -18,
+              right: 0,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 2,
+              color: SUBINK,
             }}
           >
-            {prompt}
-          </button>
+            {progressLabel} {Math.round(progress * 100)}%
+          </span>
         </div>
       )}
 

@@ -21,8 +21,9 @@
 // Responsibility split (see washStore.js): WashHud owns the F-key/buttons that
 // call startWashing/startDrying and toggle `holding`. WashDay only READS `holding`
 // and drives addWash/addDry, plus sets nearWasher/nearPeg and calls pickUpJacket.
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { avatarPos, avatarActive, useGame, registerObstacle, unregisterObstacle } from "./gameStore";
 import {
@@ -38,6 +39,10 @@ import {
   setNearPanel,
   setNearWasher,
   setNearPeg,
+  pickUpJacket,
+  startWashing,
+  startDrying,
+  setHolding,
   addWash,
   addDry,
   WASH_TIME,
@@ -61,13 +66,18 @@ const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the r
 // always flies ahead and the Track camera holds steady, so the wider spacing
 // reads as exploration, not the old jarring left↔right snap.
 //
-// Dirty denim lying on the grass front-LEFT of the line — kept clear of the pond
-// basin/waterline (a flat panel placed too close to the water sank into the bank
-// and read as "missing"). Still a visible left-ward stroll from spawn.
-const SEEK_XZ = [-5, 5];
+// Dirty denim far on the LEFT down by the pond (kept clear of the basin/waterline
+// so it stays visible). This is one end of the world — a real walk from the
+// washing machine on the far right.
+const SEEK_XZ = [-10, 3];
 const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
-// Washing machine set up out by the camp tent (front-right landmark).
-const WASHER_XZ = [10, 12];
+// A stray sock to find roughly midway between the denim and the washer — a small
+// bonus discovery so the long walk has something to look at.
+const SOCK_XZ = [-1, 8];
+const SOCK_POS = new THREE.Vector3(SOCK_XZ[0], terrainHeight(SOCK_XZ[0], SOCK_XZ[1]), SOCK_XZ[1]);
+// Washing machine out by the camp TENT on the far right — this makes the tent the
+// "laundry camp", i.e. gives it a reason to be there.
+const WASHER_XZ = [10, 11];
 const WASHER_POS = new THREE.Vector3(
   WASHER_XZ[0],
   terrainHeight(WASHER_XZ[0], WASHER_XZ[1]),
@@ -91,9 +101,12 @@ const NEAR_RANGE = 2.4;
 // the tint reads cleanly across dirty→wet→clean).
 // Washed/faded denim — light + soft so it sits with the cream clothesline palette
 // instead of clashing as a dark navy.
-const DENIM_DIRTY = new THREE.Color("#8A98A8"); // muted dusty (mud sits on top)
-const DENIM_WET = new THREE.Color("#6E8AA6"); // darker when soaked
-const DENIM_CLEAN = new THREE.Color("#AFC6DD"); // pale washed denim, fresh + light
+// Light-blue washed denim (matches a classic light-wash jacket). The texture base
+// is white so these colours set the hue directly. Even dirty it reads as blue
+// denim (mud splotches sit on top), not a grey rag.
+const DENIM_DIRTY = new THREE.Color("#A6C0DC"); // light dusty denim-blue
+const DENIM_WET = new THREE.Color("#6E90BC"); // darker, saturated when soaked
+const DENIM_CLEAN = new THREE.Color("#C3D8F0"); // bright light-wash denim
 
 // ── Reusable scratch (no per-frame allocations) ────────────────────────────────
 const _tmpColor = new THREE.Color();
@@ -133,8 +146,8 @@ function buildDenimTexture() {
   shape();
   ctx.clip();
 
-  // Base fill: light neutral grey so the material tint sets the denim color.
-  ctx.fillStyle = "#cfd2d6";
+  // White base so the material `color` sets the denim hue directly (light blue).
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, cw, ch);
 
   // Faint vertical drape shading so flat cloth isn't dead-flat.
@@ -239,8 +252,9 @@ function buildDenimTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
-  // World height tuned to read like a clothesline piece (line garments ≈ 2.0).
-  const hWorld = 1.7;
+  // Sized to roughly fit the avatar (a real jacket), not a tiny scrap. Slightly
+  // taller than the line pieces so it reads as substantial on the ground.
+  const hWorld = 2.2;
   return { texture, w: hWorld * (cw / ch), h: hWorld };
 }
 
@@ -655,10 +669,78 @@ function HungPanel({ visible, dry, done, holding, celebrate }) {
   );
 }
 
+// ── Floating keycap prompt, shown in-world right above the thing you can act on ──
+function KeyPrompt({ info }) {
+  if (!info) return null;
+  const { pos, k, verb, hold, action } = info;
+  const onDown = (e) => {
+    e.stopPropagation();
+    if (hold) setHolding(true);
+    else if (action) action();
+  };
+  const onUp = (e) => { e.stopPropagation(); if (hold) setHolding(false); };
+  return (
+    <Html position={pos} center distanceFactor={10} occlude={false} zIndexRange={[60, 0]}
+      style={{ pointerEvents: "none", userSelect: "none" }}>
+      <div
+        onPointerDown={onDown}
+        onPointerUp={hold ? onUp : undefined}
+        onPointerLeave={hold ? onUp : undefined}
+        style={{
+          pointerEvents: "auto", cursor: "pointer",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+          fontFamily: "'IBM Plex Mono', monospace",
+        }}
+      >
+        <span style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          minWidth: 40, height: 40, padding: "0 9px",
+          background: "#FFFDF7", color: "#3A2A20",
+          border: "2px solid #E2725B", borderRadius: 10,
+          fontSize: 21, fontWeight: 700,
+          boxShadow: "0 4px 0 #E2725B, 0 10px 22px rgba(58,42,32,0.32)",
+          animation: "keyBob 1.1s ease-in-out infinite",
+        }}>{k}</span>
+        <span style={{
+          background: "rgba(58,42,32,0.88)", color: "#fff",
+          fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
+          padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap",
+        }}>{(hold ? "hold " : "press ") + k + " · " + verb}</span>
+        <style>{`@keyframes keyBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}`}</style>
+      </div>
+    </Html>
+  );
+}
+
+// ── A stray sock to find along the walk (a small bonus discovery) ────────────────
+function StraySock({ visible }) {
+  return (
+    <group position={[SOCK_POS.x, SOCK_POS.y, SOCK_POS.z]} rotation={[0, 0.6, 0]} visible={visible}>
+      <mesh position={[0, 0.13, 0]} castShadow>
+        <boxGeometry args={[0.16, 0.32, 0.16]} />
+        <meshStandardMaterial color="#F3ECDD" roughness={0.9} />
+      </mesh>
+      <mesh position={[0.13, 0.05, 0]} castShadow>
+        <boxGeometry args={[0.36, 0.15, 0.16]} />
+        <meshStandardMaterial color="#F3ECDD" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.26, 0]}>
+        <boxGeometry args={[0.17, 0.05, 0.17]} />
+        <meshStandardMaterial color="#E2725B" roughness={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
 export function WashDay() {
   const { playing } = useGame();
   const wash = useWash();
-  const { phase, washP, dryP, holding } = wash;
+  const { phase, washP, dryP, holding, nearPanel, nearWasher, nearPeg } = wash;
+
+  // Stray-sock bonus find (independent of the wash phases).
+  const [sockFound, setSockFound] = useState(false);
+  const [sockToast, setSockToast] = useState(false);
+  const sockFoundRef = useRef(false);
 
   // Live mirrors for the per-frame loop (avoid stale closures).
   const phaseRef = useRef(phase);
@@ -668,8 +750,21 @@ export function WashDay() {
 
   // Reset positions/phase when a fresh wash run begins (playing flips true).
   useEffect(() => {
-    if (playing) resetWash();
+    if (playing) {
+      resetWash();
+      setSockFound(false);
+      sockFoundRef.current = false;
+      setSockToast(false);
+    }
   }, [playing]);
+
+  // Brief "found a sock!" toast.
+  useEffect(() => {
+    if (!sockFound) return undefined;
+    setSockToast(true);
+    const id = setTimeout(() => setSockToast(false), 2400);
+    return () => clearTimeout(id);
+  }, [sockFound]);
 
   // The washing machine is solid — register it so the avatar can't walk through.
   useEffect(() => {
@@ -706,6 +801,15 @@ export function WashDay() {
     if (acc.current < 0.06) return;
     acc.current = 0;
 
+    // Stray-sock bonus pickup — walk near it to collect (any phase).
+    if (!sockFoundRef.current) {
+      const ds = Math.hypot(SOCK_POS.x - avatarPos.x, SOCK_POS.z - avatarPos.z);
+      if (ds < 1.6) {
+        sockFoundRef.current = true;
+        setSockFound(true);
+      }
+    }
+
     if (ph === "seek") {
       const d = Math.hypot(SEEK_POS.x - avatarPos.x, SEEK_POS.z - avatarPos.z);
       setNearPanel(d <= PICKUP_RANGE); // in range — press G to grab (no auto-pickup)
@@ -730,6 +834,21 @@ export function WashDay() {
 
   const washing = phase === "washing";
   const nearWasherGlow = phase === "carryDirty" || washing;
+
+  // The floating keycap prompt: which key, where, and what it does — by phase.
+  const promptInfo = (() => {
+    if (phase === "seek" && nearPanel)
+      return { pos: [SEEK_POS.x, SEEK_POS.y + 1.3, SEEK_POS.z], k: "G", verb: "grab the denim", hold: false, action: pickUpJacket };
+    if (phase === "carryDirty" && nearWasher)
+      return { pos: [WASHER_POS.x, WASHER_POS.y + 2.7, WASHER_POS.z], k: "L", verb: "load the washer", hold: false, action: startWashing };
+    if (phase === "washing")
+      return { pos: [WASHER_POS.x, WASHER_POS.y + 2.7, WASHER_POS.z], k: "S", verb: "spin", hold: true };
+    if (phase === "carryWet" && nearPeg)
+      return { pos: [PEG_POS.x, PEG_POS.y + 0.8, PEG_POS.z], k: "H", verb: "hang it up", hold: false, action: startDrying };
+    if (phase === "drying")
+      return { pos: [PEG_POS.x, PEG_POS.y + 0.8, PEG_POS.z], k: "F", verb: "fan it dry", hold: true };
+    return null;
+  })();
 
   return (
     <group>
@@ -756,6 +875,23 @@ export function WashDay() {
         holding={holding}
         celebrate={celebrate}
       />
+
+      {/* stray sock to find on the walk */}
+      <StraySock visible={!sockFound} />
+      {sockToast && (
+        <Html position={[SOCK_POS.x, SOCK_POS.y + 1.1, SOCK_POS.z]} center distanceFactor={11} zIndexRange={[60, 0]} style={{ pointerEvents: "none" }}>
+          <div style={{
+            background: "rgba(255,253,247,0.95)", color: "#3A2A20",
+            border: "1.5px solid #E2725B", borderRadius: 999,
+            padding: "5px 12px", whiteSpace: "nowrap",
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600,
+            boxShadow: "0 6px 18px rgba(58,42,32,0.25)",
+          }}>🧦 found a stray sock!</div>
+        </Html>
+      )}
+
+      {/* floating keycap prompt over whatever you can act on right now */}
+      <KeyPrompt info={promptInfo} />
 
       {/* the orange bird guide + its in-world speech bubble */}
       <BirdGuide phase={phase} targetRef={targetRef} celebrate={celebrate} />

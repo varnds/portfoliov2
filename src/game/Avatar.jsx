@@ -29,6 +29,7 @@ const WALK_REF = 3.0; // ground speed the walk clips are authored for
 const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
 const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
+const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is visible without rotating
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
@@ -444,17 +445,20 @@ export function Avatar() {
       // already sits by more than ~22°. Small strafes stay put → no whip.
       let off = headingYaw - yaw.current;
       off = Math.atan2(Math.sin(off), Math.cos(off));
-      const DEADZONE = 0.55; // ~31° — ignore more wiggle before re-centering
+      const DEADZONE = 0.45; // ~26° — ignore wiggle before re-centering
       if (Math.abs(off) > DEADZONE) {
         targetYaw = headingYaw;
         yawT.current = headingYaw; // keep manual-drag target in sync
-        smoothTime = 0.6; // very gentle, continuous trail behind the heading
+        smoothTime = 1.5; // SLOW drift behind the heading — a gentle turn, not a twist
       } else {
         targetYaw = yaw.current; // within deadzone — hold the current angle
       }
     }
     yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, smoothTime, d);
-    pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
+    // Track holds a fixed, higher top-down pitch (ignores drag) so you see every
+    // direction without rotating; Follow/Free use the drag-set pitch.
+    const pitchTarget = cameraMode === "track" ? TRACK_PITCH : pitchT.current;
+    pitch.current = THREE.MathUtils.damp(pitch.current, pitchTarget, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
     // Look-ahead (follow mode only) from the SMOOTHED heading; eases to 0 when idle.
