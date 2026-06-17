@@ -9,7 +9,7 @@
 /** One short, warm, in-character line the bird says at each phase. */
 export const WASH_BEATS = {
   seek: "Follow me! Varna left one piece off the line — let's go find it.",
-  carryDirty: "Her old denim jacket, mud and all. Follow me to the washtub.",
+  carryDirty: "Her old denim jacket, mud and all. Follow me to the washing machine.",
   washing: "In you go, you stubborn thing. Hold tight while I work the suds.",
   carryWet: "Clean! Heavy as a wet cat, though. Walk it to that empty peg for me.",
   drying: "Pin it up, let the breeze have it. Fan, fan — there she dries.",

@@ -364,10 +364,11 @@ export function Avatar() {
       const rgtZ = -Math.sin(cy);
       let ix = 0;
       let iz = 0;
-      if (k.KeyW || k.ArrowUp) { ix += fwdX; iz += fwdZ; }
-      if (k.KeyS || k.ArrowDown) { ix -= fwdX; iz -= fwdZ; }
-      if (k.KeyD || k.ArrowRight) { ix += rgtX; iz += rgtZ; }
-      if (k.KeyA || k.ArrowLeft) { ix -= rgtX; iz -= rgtZ; }
+      // Arrow keys ONLY — W/A/S/D are free for Wash Day actions (S = spin, etc.)
+      if (k.ArrowUp) { ix += fwdX; iz += fwdZ; }
+      if (k.ArrowDown) { ix -= fwdX; iz -= fwdZ; }
+      if (k.ArrowRight) { ix += rgtX; iz += rgtZ; }
+      if (k.ArrowLeft) { ix -= rgtX; iz -= rgtZ; }
       const il = Math.hypot(ix, iz);
       if (il > 0) {
         moved = true;

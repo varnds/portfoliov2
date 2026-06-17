@@ -29,6 +29,7 @@ const initial = {
   phase: "seek", // seek | carryDirty | washing | carryWet | drying | done
   washP: 0, // 0..1 wash progress
   dryP: 0, // 0..1 dry progress
+  nearPanel: false, // player (seeking) is in range of the muddy denim to grab (press G)
   nearWasher: false, // player (carrying dirty) is in range of the washer
   nearPeg: false, // player (carrying wet) is in range of the empty peg
   holding: false, // the player is holding the mini-interaction (spin / fan)
@@ -53,6 +54,11 @@ export function resetWash() {
 export function pickUpJacket() {
   if (s.phase !== "seek") return;
   s = { ...s, phase: "carryDirty" };
+  emit();
+}
+export function setNearPanel(v) {
+  if (s.nearPanel === !!v) return;
+  s = { ...s, nearPanel: !!v };
   emit();
 }
 export function setNearWasher(v) {

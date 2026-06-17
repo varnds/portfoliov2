@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useGame, endGame } from "./gameStore";
 import {
   useWash,
+  pickUpJacket,
   startWashing,
   startDrying,
   setHolding,
@@ -27,31 +28,33 @@ const INK = "#3A2A20";
 const SUBINK = "#5A463A";
 const GOLD = "#E7B36A";
 
-// Phase prompts that drive the F-key / button (null = no action available).
-function promptFor(phase, nearWasher, nearPeg, washP, dryP) {
-  if (phase === "carryDirty" && nearWasher) return { prompt: "Press F to load the washer" };
-  if (phase === "washing") return { prompt: "HOLD F to spin", isHold: true, progress: washP, progressLabel: "WASH" };
-  if (phase === "carryWet" && nearPeg) return { prompt: "Press F to hang it" };
+// Phase prompts that drive the per-action keys / button (null = no action).
+//   G grab · L load · S (hold) spin · H hang · F (hold) fan
+function promptFor(phase, nearPanel, nearWasher, nearPeg, washP, dryP) {
+  if (phase === "seek" && nearPanel) return { prompt: "Press G to grab the denim" };
+  if (phase === "carryDirty" && nearWasher) return { prompt: "Press L to load the washing machine" };
+  if (phase === "washing") return { prompt: "HOLD S to spin", isHold: true, progress: washP, progressLabel: "WASH" };
+  if (phase === "carryWet" && nearPeg) return { prompt: "Press H to hang it" };
   if (phase === "drying") return { prompt: "HOLD F to fan", isHold: true, progress: dryP, progressLabel: "DRY" };
   return null;
 }
 
 export function WashHud() {
   const { gameMode, playing } = useGame();
-  const { phase, washP, dryP, nearWasher, nearPeg } = useWash();
+  const { phase, washP, dryP, nearPanel, nearWasher, nearPeg } = useWash();
 
   // Live mirror of the gate so the global key listener can early-out without
   // re-binding on every store change.
   const activeRef = useRef(false);
   activeRef.current = gameMode === "wash" && playing;
 
-  // Track whether F is currently held so keyboard auto-repeat doesn't thrash
+  // Which hold-key (s/f) is currently down, so auto-repeat doesn't thrash
   // setHolding (keydown fires repeatedly while a key is held).
-  const fHeldRef = useRef(false);
+  const holdKeyRef = useRef(null);
 
   // Latest phase / proximity for the key handler (avoids re-binding listeners).
-  const ctx = useRef({ phase, nearWasher, nearPeg });
-  ctx.current = { phase, nearWasher, nearPeg };
+  const ctx = useRef({ phase, nearPanel, nearWasher, nearPeg });
+  ctx.current = { phase, nearPanel, nearWasher, nearPeg };
 
   // Line-complete celebration window: when phase flips to "done" we show a golden
   // banner for ~2.5s, THEN reveal About (P1 #6 — the visual win lands first).
@@ -66,38 +69,38 @@ export function WashHud() {
     return undefined;
   }, [phase]);
 
-  // ── Global F-key handling ──────────────────────────────────────────────────
-  // F ONLY — never Space (Space is the avatar jump). One keydown/keyup pair,
-  // guarded on the live gate, cleaned up on unmount / when leaving play.
+  // ── Per-action key handling: G grab · L load · S(hold) spin · H hang · F(hold) fan ──
+  // G/L/H are single presses; S/F are press-and-hold (spin / fan). Guarded on the
+  // live gate, cleaned up on unmount / when leaving play.
   useEffect(() => {
-    const isF = (e) => e.code === "KeyF" || e.key === "f" || e.key === "F";
+    const keyOf = (e) => (e.key || "").toLowerCase();
 
     const onDown = (e) => {
-      if (!activeRef.current || !isF(e)) return;
-      const { phase: ph, nearWasher: nw, nearPeg: np } = ctx.current;
-      if (e.repeat || fHeldRef.current) {
-        if (ph === "washing" || ph === "drying") e.preventDefault();
-        return;
-      }
-      fHeldRef.current = true;
+      if (!activeRef.current) return;
+      const { phase: ph, nearPanel: npanel, nearWasher: nw, nearPeg: np } = ctx.current;
+      const k = keyOf(e);
 
-      if (ph === "carryDirty" && nw) {
+      // press actions (one-shot; ignore auto-repeat)
+      if (k === "g" && ph === "seek" && npanel) { e.preventDefault(); if (!e.repeat) pickUpJacket(); return; }
+      if (k === "l" && ph === "carryDirty" && nw) { e.preventDefault(); if (!e.repeat) startWashing(); return; }
+      if (k === "h" && ph === "carryWet" && np) { e.preventDefault(); if (!e.repeat) startDrying(); return; }
+
+      // hold actions — S spins (washing), F fans (drying)
+      const isHoldKey = (k === "s" && ph === "washing") || (k === "f" && ph === "drying");
+      if (isHoldKey) {
         e.preventDefault();
-        startWashing();
-      } else if (ph === "carryWet" && np) {
-        e.preventDefault();
-        startDrying();
-      } else if (ph === "washing" || ph === "drying") {
-        e.preventDefault();
+        if (e.repeat || holdKeyRef.current) return;
+        holdKeyRef.current = k;
         setHolding(true);
       }
     };
 
     const onUp = (e) => {
-      if (!isF(e)) return;
-      if (!fHeldRef.current) return;
-      fHeldRef.current = false;
-      setHolding(false);
+      const k = keyOf(e);
+      if (holdKeyRef.current && k === holdKeyRef.current) {
+        holdKeyRef.current = null;
+        setHolding(false);
+      }
     };
 
     window.addEventListener("keydown", onDown);
@@ -105,15 +108,15 @@ export function WashHud() {
     return () => {
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
-      fHeldRef.current = false;
+      holdKeyRef.current = null;
       setHolding(false);
     };
   }, []);
 
-  // Safety: release the hold if we leave play while F is still down.
+  // Safety: release the hold if we leave play while a hold-key is still down.
   useEffect(() => {
-    if (!activeRef.current && fHeldRef.current) {
-      fHeldRef.current = false;
+    if (!activeRef.current && holdKeyRef.current) {
+      holdKeyRef.current = null;
       setHolding(false);
     }
   }, [gameMode, playing]);
@@ -134,12 +137,13 @@ export function WashHud() {
     setHolding(false);
   };
   const pressAction = () => {
-    const { phase: ph, nearWasher: nw, nearPeg: np } = ctx.current;
-    if (ph === "carryDirty" && nw) startWashing();
+    const { phase: ph, nearPanel: npanel, nearWasher: nw, nearPeg: np } = ctx.current;
+    if (ph === "seek" && npanel) pickUpJacket();
+    else if (ph === "carryDirty" && nw) startWashing();
     else if (ph === "carryWet" && np) startDrying();
   };
 
-  const p = promptFor(phase, nearWasher, nearPeg, washP, dryP) || {};
+  const p = promptFor(phase, nearPanel, nearWasher, nearPeg, washP, dryP) || {};
   const { prompt = null, isHold = false, progress = 0, progressLabel = "" } = p;
 
   // Celebration banner shows the moment we hit "done" and before About reveals.

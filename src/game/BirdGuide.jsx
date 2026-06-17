@@ -5,7 +5,7 @@
 // way to walk and the bird stays in front of you, on-screen.
 //
 // Targets per phase come from WashDay (targetRef, a live THREE.Vector3):
-//   seek→ground denim, carryDirty→washtub, washing→washtub, carryWet→peg,
+//   seek→ground denim, carryDirty→washing machine, washing→machine, carryWet→peg,
 //   drying→peg, done→victory loop near the line.
 //
 // Props:
@@ -163,7 +163,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     const lead = celebrate ? 0 : Math.min(LEAD_AHEAD, dist);
     const baseX = dist > 0.4 ? a.x + (dx / dist) * lead : target.x;
     const baseZ = dist > 0.4 ? a.z + (dz / dist) * lead : target.z;
-    const hoverY = celebrate ? 2.4 : 1.7;
+    const hoverY = celebrate ? 2.4 : 1.95;
     const circleR = celebrate ? 1.4 : 0.32; // tight bob while leading; wide victory loop
     const circleSpd = celebrate ? 2.6 : 1.3;
     // Hover a fixed height above the GROUND at its location (not the avatar's Y —
@@ -203,7 +203,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
 
   return (
     <group ref={root}>
-      <group scale={0.8}>
+      <group scale={0.55}>
         <OrangeBirdShape wingL={wingL} wingR={wingR} />
       </group>
       {/* hide the bubble during the celebration loop (HUD banner takes over) */}

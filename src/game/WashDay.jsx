@@ -35,7 +35,7 @@ import { buildFlatPanel } from "../scene3d/clothGarment";
 import {
   useWash,
   resetWash,
-  pickUpJacket,
+  setNearPanel,
   setNearWasher,
   setNearPeg,
   addWash,
@@ -56,14 +56,15 @@ const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the r
 
 // ── A gently-arcing route the bird leads you along (no sharp left↔right): you
 // start at spawn (~0,16), stroll front-LEFT to the muddy denim by the water, the
-// bird then leads you RIGHT across the yard to the washtub, and finally a short
+// bird then leads you RIGHT across the yard to the washing machine, and finally a short
 // step back to the empty peg on the line. One smooth sweep, bird always ahead.
 //
-// Dirty denim lying on the grass by the pond's edge (front-left).
-const SEEK_XZ = [-5, 11];
+// Dirty denim lying on the grass by the pond's edge (front-left). Set well out
+// from spawn (~0,16) so the bird visibly LEADS you to it rather than sitting still.
+const SEEK_XZ = [-12, 2];
 const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
-// Washtub set up in the yard, front-and-centre-right (pulled in from the tent so
-// the leg from the denim isn't a long cross-map dash).
+// Washing machine set up in the yard, front-and-centre-right (pulled in from the
+// tent so the leg from the denim isn't a long cross-map dash).
 const WASHER_XZ = [5, 8];
 const WASHER_POS = new THREE.Vector3(
   WASHER_XZ[0],
@@ -73,8 +74,11 @@ const WASHER_POS = new THREE.Vector3(
 
 const PEG_POS = new THREE.Vector3(PEG_POINT[0], PEG_POINT[1], PEG_POINT[2]);
 
-const PICKUP_RANGE = 1.4;
-const NEAR_RANGE = 2.2;
+// Generous so standing ON the dropped garment always registers — the visible
+// cloth is laid ~0.85 off the SEEK_POS anchor and has its own size, so a tight
+// radius could miss you even while you're clearly on top of it.
+const PICKUP_RANGE = 2.6;
+const NEAR_RANGE = 2.4;
 
 // Denim palette across the three states (the canvas art is tinted by lerping the
 // material color; the texture itself carries the seam/stitch detail in greys so
@@ -600,12 +604,14 @@ function CarriedPanel({ visible, state }) {
     g.current.visible = visible;
     if (!visible) return;
     const t = st.clock.elapsedTime;
-    // float a small folded bundle clearly ABOVE the head (it used to drape down
-    // into the avatar's head). High enough that the panel never overlaps the body.
+    // Carry the small bundle beside the avatar (tucked under the arm) rather than
+    // floating dead-centre overhead: the overhead position both clipped the head
+    // and sat in front of the leading bird, hiding it. Offset to the side + lower
+    // keeps it clear of the head AND out of the forward sightline to the bird.
     g.current.position.set(
-      avatarPos.x,
-      avatarPos.y + 3.05 + Math.sin(t * 2.5) * 0.08,
-      avatarPos.z
+      avatarPos.x + 0.95,
+      avatarPos.y + 1.55 + Math.sin(t * 2.5) * 0.06,
+      avatarPos.z + 0.35
     );
     g.current.rotation.y = Math.sin(t * 0.6) * 0.25;
   });
@@ -635,7 +641,7 @@ function HungPanel({ visible, dry, done, holding, celebrate }) {
         hung
         // celebration: an extra breeze flourish when the line first completes;
         // a live fan-boost while the player holds to dry.
-        windBoost={celebrate ? 0.7 : holding ? 0.35 : 0}
+        windBoost={celebrate ? 0.7 : holding ? 0.62 : 0}
       />
     </group>
   );
@@ -694,7 +700,7 @@ export function WashDay() {
 
     if (ph === "seek") {
       const d = Math.hypot(SEEK_POS.x - avatarPos.x, SEEK_POS.z - avatarPos.z);
-      if (d <= PICKUP_RANGE) pickUpJacket();
+      setNearPanel(d <= PICKUP_RANGE); // in range — press G to grab (no auto-pickup)
       targetRef.current = SEEK_POS;
     } else if (ph === "carryDirty") {
       const d = Math.hypot(WASHER_POS.x - avatarPos.x, WASHER_POS.z - avatarPos.z);
