@@ -54,18 +54,18 @@ const LINE = clotheslineEnds(LEFT_POST, RIGHT_POST);
 const PEG_T = 0.9;
 const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the rope
 
-// ── A gently-arcing route the bird leads you along (no sharp left↔right): you
-// start at spawn (~0,16), stroll front-LEFT to the muddy denim by the water, the
-// bird then leads you RIGHT across the yard to the washing machine, and finally a short
-// step back to the empty peg on the line. One smooth sweep, bird always ahead.
+// ── The bird leads you on a wandering errand that takes in the two landmarks of
+// the world — the POND (left) and the TENT (right) — so Wash Day doubles as a
+// little tour: spawn (~0,16) → muddy denim down by the water → across to the
+// washing machine by the tent → back to the empty peg on the line. The bird
+// always flies ahead and the Track camera holds steady, so the wider spacing
+// reads as exploration, not the old jarring left↔right snap.
 //
-// Dirty denim lying on the grass by the pond's edge (front-left). Set well out
-// from spawn (~0,16) so the bird visibly LEADS you to it rather than sitting still.
-const SEEK_XZ = [-12, 2];
+// Dirty denim lying on the grass at the pond's edge (front-left, clear of the water).
+const SEEK_XZ = [-11, 6];
 const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
-// Washing machine set up in the yard, front-and-centre-right (pulled in from the
-// tent so the leg from the denim isn't a long cross-map dash).
-const WASHER_XZ = [5, 8];
+// Washing machine set up out by the camp tent (front-right landmark).
+const WASHER_XZ = [10, 12];
 const WASHER_POS = new THREE.Vector3(
   WASHER_XZ[0],
   terrainHeight(WASHER_XZ[0], WASHER_XZ[1]),
@@ -108,16 +108,18 @@ function buildDenimTexture() {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, cw, ch);
 
-  // Garment silhouette: a panel with a waistband top, gently flaring body, soft
-  // rounded hem — reads as a folded pair of denims / a denim throw.
+  // Denim JACKET silhouette (front view): notched collar, shoulders, a body that
+  // nips slightly at the waist then to the hem — so it reads as a real garment
+  // like the line pieces, not a folded throw.
   const shape = () => {
     ctx.beginPath();
-    ctx.moveTo(54, 30);
-    ctx.lineTo(306, 30);
-    ctx.lineTo(318, 120); // shoulder out
-    ctx.quadraticCurveTo(330, 300, 300, 430); // right body
-    ctx.quadraticCurveTo(180, 458, 60, 430); // hem
-    ctx.quadraticCurveTo(30, 300, 42, 120); // left body
+    ctx.moveTo(150, 40);                       // collar top-left
+    ctx.lineTo(96, 66);                        // left shoulder
+    ctx.quadraticCurveTo(86, 232, 96, 410);    // left side (slight waist)
+    ctx.quadraticCurveTo(180, 432, 264, 410);  // hem
+    ctx.quadraticCurveTo(274, 232, 264, 66);   // right side
+    ctx.lineTo(210, 40);                       // collar top-right
+    ctx.lineTo(180, 72);                       // collar V notch
     ctx.closePath();
   };
 
@@ -154,13 +156,13 @@ function buildDenimTexture() {
     ctx.stroke();
   }
 
-  // Waistband band across the top.
+  // Centre button placket — a slightly darker band down the front.
   ctx.fillStyle = "rgba(0,0,0,0.10)";
-  ctx.fillRect(0, 30, cw, 40);
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(0, 30, cw, 6);
+  ctx.fillRect(168, 64, 26, 348);
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.fillRect(168, 64, 5, 348);
 
-  // Warm topstitch thread.
+  // Warm mustard topstitch thread.
   const stitch = (drawPath, dash = [9, 6]) => {
     ctx.save();
     ctx.setLineDash(dash);
@@ -171,68 +173,62 @@ function buildDenimTexture() {
     ctx.stroke();
     ctx.restore();
   };
-  // waistband double-stitch
-  stitch(() => {
-    ctx.beginPath();
-    ctx.moveTo(40, 44);
-    ctx.lineTo(320, 44);
-  });
-  stitch(() => {
-    ctx.beginPath();
-    ctx.moveTo(40, 64);
-    ctx.lineTo(320, 64);
-  });
-  // central front seam
-  stitch(() => {
-    ctx.beginPath();
-    ctx.moveTo(180, 70);
-    ctx.lineTo(180, 440);
-  });
-  // side seams
-  ctx.setLineDash([]);
-  ctx.strokeStyle = "rgba(0,0,0,0.18)";
-  ctx.lineWidth = 2;
-  [80, 280].forEach((x) => {
-    ctx.beginPath();
-    ctx.moveTo(x, 72);
-    ctx.lineTo(x, 432);
-    ctx.stroke();
-  });
+  // placket double topstitch
+  stitch(() => { ctx.beginPath(); ctx.moveTo(170, 72); ctx.lineTo(170, 404); });
+  stitch(() => { ctx.beginPath(); ctx.moveTo(192, 72); ctx.lineTo(192, 404); });
+  // yoke seam across the chest
+  stitch(() => { ctx.beginPath(); ctx.moveTo(96, 116); ctx.quadraticCurveTo(180, 132, 264, 116); });
+  // hem band stitch
+  stitch(() => { ctx.beginPath(); ctx.moveTo(98, 392); ctx.quadraticCurveTo(180, 414, 266, 392); });
 
-  // A back pocket with stitched arc.
-  ctx.fillStyle = "rgba(0,0,0,0.08)";
-  ctx.beginPath();
-  ctx.moveTo(96, 150);
-  ctx.lineTo(156, 150);
-  ctx.lineTo(150, 210);
-  ctx.lineTo(126, 226);
-  ctx.lineTo(102, 210);
-  ctx.closePath();
-  ctx.fill();
-  stitch(() => {
+  // Armhole curves (suggest set-in sleeves) + side seams.
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(0,0,0,0.16)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(100, 70); ctx.quadraticCurveTo(122, 150, 114, 250); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(260, 70); ctx.quadraticCurveTo(238, 150, 246, 250); ctx.stroke();
+
+  // Two chest flap-pockets with stitched edges.
+  const pocket = (px) => {
+    ctx.fillStyle = "rgba(0,0,0,0.07)";
     ctx.beginPath();
-    ctx.moveTo(96, 150);
-    ctx.lineTo(156, 150);
-    ctx.lineTo(150, 210);
-    ctx.lineTo(126, 226);
-    ctx.lineTo(102, 210);
-    ctx.closePath();
-  }, [7, 5]);
+    ctx.moveTo(px, 150); ctx.lineTo(px + 50, 150);
+    ctx.lineTo(px + 50, 192); ctx.lineTo(px + 25, 206); ctx.lineTo(px, 192);
+    ctx.closePath(); ctx.fill();
+    stitch(() => {
+      ctx.beginPath();
+      ctx.moveTo(px, 150); ctx.lineTo(px + 50, 150);
+      ctx.lineTo(px + 50, 192); ctx.lineTo(px + 25, 206); ctx.lineTo(px, 192);
+      ctx.closePath();
+    }, [7, 5]);
+  };
+  pocket(112);
+  pocket(198);
 
   ctx.restore(); // end clip
 
-  // Rivets + button (drawn after clip so they sit crisp on the band).
+  // Crisp metal buttons (after clip so they stay sharp): placket + pocket studs.
   ctx.fillStyle = "#C9A24B";
-  [[60, 78], [300, 78], [126, 150]].forEach(([x, y]) => {
+  [118, 168, 218, 268, 318].forEach((y) => {
     ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.arc(180, y, 5.5, 0, Math.PI * 2);
     ctx.fill();
   });
-  // waistband button
-  ctx.fillStyle = "#B8902F";
+  [[137, 150], [223, 150]].forEach(([x, y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  // collar topstitch (the V notch)
+  ctx.save();
+  ctx.setLineDash([8, 5]);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#E7B36A";
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(180, 50, 8, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(150, 44); ctx.lineTo(180, 72); ctx.lineTo(210, 44);
+  ctx.stroke();
+  ctx.restore();
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -344,10 +340,14 @@ function DenimPanel({ state, p = 0, holding = false, hung = false, windBoost = 0
     else billow = 0.28; // dirty: limp-ish
     // a held-fan boost makes the live drying interaction feel responsive
     billow += windBoost;
+    // While fanning, the cloth not only billows MORE but flaps FASTER, with a
+    // fast pumping snap — so the fan reads as vigorous, not a gentle sway.
+    const spd = 1.0 + windBoost * 1.8;
+    const swayK = 1 + windBoost * 2.2;
 
-    const spd = 1.0;
     const ph = hung ? 2.3 : 0.6;
     const gust = 0.7 + 0.5 * Math.sin(t * 0.6 + ph);
+    const pump = windBoost > 0 ? Math.sin(t * 9 + ph) * 0.07 * windBoost : 0;
     const arr = mesh.geometry.attributes.position.array;
     const marr = mud.geometry.attributes.position.array;
     const useMud = state === "dirty";
@@ -361,8 +361,9 @@ function DenimPanel({ state, p = 0, holding = false, hung = false, windBoost = 0
       const flutter =
         Math.sin(bx * 15 + by * 6 + t * 2.4 * spd + ph) * 0.04 +
         Math.sin(by * 11 - t * 1.7 * spd + ph * 1.3) * 0.06 +
-        Math.sin(bx * 30 + t * 3.2 * spd + ph) * 0.018;
-      const sway = Math.sin(by * 6 + t * 1.2 * spd + ph) * 0.02 * amp;
+        Math.sin(bx * 30 + t * 3.2 * spd + ph) * 0.018 +
+        pump; // whole-cloth pumping flap while fanning
+      const sway = Math.sin(by * 6 + t * 1.2 * spd + ph) * 0.02 * amp * swayK;
       const z = flutter * amp * gust * billow;
       arr[o] = bx + sway;
       arr[o + 1] = by;
@@ -641,7 +642,7 @@ function HungPanel({ visible, dry, done, holding, celebrate }) {
         hung
         // celebration: an extra breeze flourish when the line first completes;
         // a live fan-boost while the player holds to dry.
-        windBoost={celebrate ? 0.7 : holding ? 0.62 : 0}
+        windBoost={celebrate ? 1.0 : holding ? 1.6 : 0}
       />
     </group>
   );

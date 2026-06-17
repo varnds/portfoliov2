@@ -131,6 +131,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const wingR = useRef();
   const posRef = useRef(null); // current flown position (smoothed)
   const lastPhase = useRef(phase); // re-greet (start beside player) on phase change
+  const flourish = useRef(0); // seconds left of an excited spin+hop on a new leg
 
   const line = useMemo(() => WASH_BEATS[phase] || "", [phase]);
 
@@ -155,8 +156,11 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     // then pulls ahead — "follow me".
     if (lastPhase.current !== phase) {
       lastPhase.current = phase;
+      flourish.current = 1.2; // do an excited little spin + hop, then lead
       if (posRef.current) posRef.current.set(a.x, a.y + 1.7, a.z);
     }
+    flourish.current = Math.max(0, flourish.current - dt);
+    const fl = flourish.current > 0 ? flourish.current / 1.2 : 0; // 1→0 over the flourish
 
     // Hover point: lead the player by LEAD_AHEAD toward the target, but never past
     // it — once you arrive, the bird settles right over the spot to mark it.
@@ -169,9 +173,12 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     // Hover a fixed height above the GROUND at its location (not the avatar's Y —
     // which is high mid sky-drop and would fling the bird into the sky).
     const baseY = celebrate ? target.y : terrainHeight(baseX, baseZ);
+    // Livelier bob (two frequencies) + a single up-hop during the flourish.
+    const bob = Math.sin(t * 2.4) * 0.16 + Math.sin(t * 5.0) * 0.05;
+    const hop = fl > 0 ? Math.sin((1 - fl) * Math.PI) * 0.45 : 0;
     _goal.set(
       baseX + Math.cos(t * circleSpd) * circleR,
-      baseY + hoverY + Math.sin(t * 1.6) * 0.16,
+      baseY + hoverY + bob + hop,
       baseZ + Math.sin(t * circleSpd) * circleR
     );
 
@@ -188,15 +195,20 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     // still, look toward the target so it points the way.
     const mdx = pos.x - _prev.x;
     const mdz = pos.z - _prev.z;
+    let faceYaw = g.rotation.y;
     if (mdx * mdx + mdz * mdz > 1e-6) {
-      g.rotation.y = Math.atan2(-mdz, mdx);
+      faceYaw = Math.atan2(-mdz, mdx);
     } else if (dist > 0.4) {
-      g.rotation.y = Math.atan2(-dz, dx);
+      faceYaw = Math.atan2(-dz, dx);
     }
-    g.rotation.z = Math.sin(t * 0.7) * 0.12 + (celebrate ? 0.35 : 0);
+    // A happy full twirl at the start of each leg (one spin over the flourish).
+    g.rotation.y = faceYaw + (fl > 0 ? (1 - fl) * Math.PI * 2 : 0);
+    // Lively banking roll, tipped harder during the flourish + celebration.
+    g.rotation.z = Math.sin(t * 1.3) * 0.2 + fl * 0.5 + (celebrate ? 0.35 : 0);
 
-    // wing flap
-    const flap = Math.sin(t * (celebrate ? 22 : 12)) * 0.7 + 0.2;
+    // wing flap — quick and eager; flutters even faster during the flourish.
+    const flapSpd = celebrate ? 24 : fl > 0 ? 28 : 15;
+    const flap = Math.sin(t * flapSpd) * 0.8 + 0.25;
     if (wingL.current) wingL.current.rotation.z = flap;
     if (wingR.current) wingR.current.rotation.z = -flap;
   });

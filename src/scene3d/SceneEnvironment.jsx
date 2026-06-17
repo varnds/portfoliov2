@@ -177,12 +177,7 @@ export function SceneEnvironment({
             palette={palette}
             windStrength={windStrength}
             highlighted={highlighted}
-            onPointerOver={() => onGarmentPointerOver?.(piece.id)}
-            onPointerOut={() => onGarmentPointerOut?.(piece.id)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onGarmentClick?.(piece);
-            }}
+            interactive={false}
           />
         );
       })}

@@ -13,6 +13,7 @@ export function GarmentMesh({
   onPointerOver,
   onPointerOut,
   onClick,
+  interactive = true,
 }) {
   const groupRef = useRef();
   const clothRef = useRef();
@@ -30,21 +31,26 @@ export function GarmentMesh({
       Math.sin(t * 1.9 * spd + ph) * THREE.MathUtils.degToRad(0.5);
   });
 
-  return (
-    <group ref={groupRef} position={position}>
-      <group
-        ref={clothRef}
-        onPointerOver={(e) => {
+  // In the 3D explore world the garments are scenery, not buttons — when not
+  // interactive, attach no pointer/click handlers (and no pointer cursor).
+  const handlers = interactive
+    ? {
+        onPointerOver: (e) => {
           e.stopPropagation();
           document.body.style.cursor = "pointer";
           onPointerOver?.(e);
-        }}
-        onPointerOut={(e) => {
+        },
+        onPointerOut: (e) => {
           document.body.style.cursor = "";
           onPointerOut?.(e);
-        }}
-        onClick={onClick}
-      >
+        },
+        onClick,
+      }
+    : {};
+
+  return (
+    <group ref={groupRef} position={position}>
+      <group ref={clothRef} {...handlers}>
         <GarmentModel
           piece={piece}
           palette={palette}

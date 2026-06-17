@@ -28,6 +28,7 @@ const RUN_SPEED = 8.6;
 const WALK_REF = 3.0; // ground speed the walk clips are authored for
 const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
+const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
@@ -423,15 +424,17 @@ export function Avatar() {
     // drifts as yaw eases behind it, which is the chase, not a curl.)
     // Three follow MODES (all spring-smoothed via smoothDampAngle so the camera
     // eases in/out as one continuous motion — never lag-then-snap):
-    //   • track  — fixed viewing angle; the camera GLIDES to keep you centered but
-    //              never rotates as you move, so left/right strafing has zero swing.
-    //              The calm default. You can still drag to choose the angle.
+    //   • track  — LOCKED ¾ viewing angle: the camera glides to keep you centred
+    //              but its angle never changes (drag won't spin it, movement won't
+    //              swing it). Zero disorientation. The calm default.
     //   • follow — eases BEHIND your heading, but with a DEADZONE so small left/
     //              right wiggles don't rotate the view — it only re-centers on a
     //              real, sustained turn (and more gently than before).
-    //   • free   — pure manual orbit; movement never touches the camera angle.
-    let targetYaw = yawT.current;
-    let smoothTime = 0.12; // manual / track: track the chosen angle promptly
+    //   • free   — pure manual orbit: drag to spin the camera wherever you like.
+    // (This is the concrete Track-vs-Free difference: Track's yaw is fixed; Free's
+    // yaw follows your drag.)
+    let targetYaw = cameraMode === "track" ? TRACK_YAW : yawT.current;
+    let smoothTime = 0.12; // manual / track: settle to the chosen angle promptly
     const follow = cameraMode === "follow" && !drag.current;
     if (follow && moved) {
       // Heading the player is walking (raw input → no smoothing lag).
