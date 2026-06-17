@@ -1,8 +1,9 @@
-import React, { useLayoutEffect, useMemo, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { computeEntryCamera } from "./coords";
+import { useGame } from "../game/gameStore";
 
 const easeInOutCubic = (t) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -14,6 +15,13 @@ export function ExploreControls({ cameraPreset, entryKey, hangPositions }) {
   const ref = useRef();
   const { camera } = useThree();
   const { position, target } = cameraPreset;
+
+  // While PLAYING, the Avatar owns the camera (its own follow + free 360° drag).
+  // Leaving this OrbitControls active would fight the avatar for the same mouse
+  // drag, so disable it during play and hand control back when play ends.
+  const { playing } = useGame();
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
 
   const entry = useMemo(
     () => computeEntryCamera(hangPositions),
@@ -61,9 +69,14 @@ export function ExploreControls({ cameraPreset, entryKey, hangPositions }) {
     ref.current.update();
     if (it.t >= 1) {
       it.active = false;
-      ref.current.enabled = true;
+      ref.current.enabled = !playingRef.current;
     }
   });
+
+  // Toggle with play state (without waiting for the intro to re-run).
+  useEffect(() => {
+    if (ref.current && !intro.current.active) ref.current.enabled = !playing;
+  }, [playing]);
 
   return (
     <OrbitControls
