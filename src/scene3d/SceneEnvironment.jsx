@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   clotheslineEnds,
   clotheslinePoint,
@@ -8,6 +8,7 @@ import {
   POND_X,
   POND_Z,
 } from "./coords";
+import { registerObstacle, unregisterObstacle, useGame } from "../game/gameStore";
 import { GarmentMesh } from "./GarmentMesh";
 import { Terrain } from "./Terrain";
 import { Water } from "./Water";
@@ -80,6 +81,24 @@ export function SceneEnvironment({
   onGarmentPointerOut,
   onGarmentClick,
 }) {
+  // In Wash Day the BirdGuide is THE bird, so hide the ambient orange bird then
+  // (otherwise there are two birds).
+  const { gameMode, playing } = useGame();
+  const washActive = gameMode === "wash" && playing;
+
+  // Register the solid scenery the avatar shouldn't walk through (clothesline
+  // posts + the tent) so collision works in every game mode.
+  useEffect(() => {
+    registerObstacle("post-L", LEFT_POST.x, LEFT_POST.z, 0.45);
+    registerObstacle("post-R", RIGHT_POST.x, RIGHT_POST.z, 0.45);
+    registerObstacle("tent", 14, 10, 2.6);
+    return () => {
+      unregisterObstacle("post-L");
+      unregisterObstacle("post-R");
+      unregisterObstacle("tent");
+    };
+  }, []);
+
   return (
     <group>
       <Terrain palette={palette} />
@@ -115,7 +134,7 @@ export function SceneEnvironment({
 
       <SkySun palette={palette} position={SUN_POSITION} show={showSun && !isNight} />
       <FlyingBirds show={!isNight} />
-      <OrangeBird show={!isNight} onChirp={onChirp} />
+      <OrangeBird show={!isNight && !washActive} onChirp={onChirp} />
       <SpringFlowers palette={palette} show={seasonKey === "spring"} />
       <AutumnLeaves seasonKey={seasonKey} />
       {seasonKey === "autumn" && <AutumnMotes />}

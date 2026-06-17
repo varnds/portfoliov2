@@ -404,10 +404,10 @@ export function Avatar() {
     if (autoChase && moved) {
       targetYaw = Math.atan2(-shx, -shz);
       yawT.current = targetYaw; // keep manual-drag target in sync for seamless grab
-      yawLambda = 6;
+      yawLambda = 3.0; // GENTLE chase — was 6 (too fast/whippy); ease behind smoothly
     } else if (autoChase && idle.current > 0.18) {
       targetYaw = yawT.current; // settled idle: hold the last chase yaw
-      yawLambda = 6;
+      yawLambda = 3.0;
     }
     let dy = targetYaw - yaw.current;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -415,22 +415,24 @@ export function Avatar() {
     pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
-    // Look-ahead ("both") from the SMOOTHED heading; eases to 0 when idle.
+    // Look-ahead ("both") from the SMOOTHED heading; eases to 0 when idle. Small,
+    // so the camera doesn't swing wildly ahead (was 2.6 — felt lurchy).
     const leadOn = cameraMode === "both" && moved;
-    const LEAD = 2.6;
-    leadX.current = THREE.MathUtils.damp(leadX.current, leadOn ? shx * LEAD : 0, 2.5, dt);
-    leadZ.current = THREE.MathUtils.damp(leadZ.current, leadOn ? shz * LEAD : 0, 2.5, dt);
+    const LEAD = 1.2;
+    leadX.current = THREE.MathUtils.damp(leadX.current, leadOn ? shx * LEAD : 0, 2.0, dt);
+    leadZ.current = THREE.MathUtils.damp(leadZ.current, leadOn ? shz * LEAD : 0, 2.0, dt);
 
-    // Damp a FOCUS point toward (avatar + lead) so avatar micro-jitter / terrain
-    // steps don't snap the camera. Track GROUND height so jumps read as lift.
+    // Damp a FOCUS point toward (avatar + lead). Track the avatar TIGHTLY (high
+    // lambda) so the camera doesn't lag behind at speed, while the yaw eases
+    // gently above — together that reads as a smooth follow, not "fast + laggy".
     const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
     const goalX = avatarPos.x + leadX.current;
     const goalZ = avatarPos.z + leadZ.current;
     if (!focus.current) focus.current = { x: goalX, y: camBaseY, z: goalZ };
     const f = focus.current;
-    f.x = THREE.MathUtils.damp(f.x, goalX, 9, dt);
-    f.z = THREE.MathUtils.damp(f.z, goalZ, 9, dt);
-    f.y = THREE.MathUtils.damp(f.y, camBaseY, 7, dt);
+    f.x = THREE.MathUtils.damp(f.x, goalX, 13, dt);
+    f.z = THREE.MathUtils.damp(f.z, goalZ, 13, dt);
+    f.y = THREE.MathUtils.damp(f.y, camBaseY, 8, dt);
 
     const cp = pitch.current;
     const r = dist.current;

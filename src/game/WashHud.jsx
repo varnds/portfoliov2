@@ -20,7 +20,7 @@ import {
   startDrying,
   setHolding,
 } from "./washStore";
-import { LINE_COMPLETE, ABOUT } from "./washStory";
+import { LINE_COMPLETE, ABOUT, WASH_BEATS } from "./washStory";
 
 const ACCENT = "#E2725B";
 const INK = "#3A2A20";
@@ -180,6 +180,40 @@ export function WashHud() {
           .wash-anim { animation-duration: 0.001s !important; animation-delay: 0s !important; }
         }
       `}</style>
+
+      {/* ── Bird's words, as a persistent HUD caption (bottom-center) so they're
+          ALWAYS readable even when the in-world bubble drifts off the top edge ── */}
+      {!celebrating && !showAbout && WASH_BEATS[phase] && (
+        <div
+          key={phase}
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            bottom: 150,
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: "min(560px, 88vw)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 16px",
+            borderRadius: 999,
+            background: "rgba(255,253,247,0.92)",
+            border: `1.5px solid ${ACCENT}`,
+            boxShadow: "0 8px 24px rgba(58,42,32,0.2)",
+            fontFamily: "'IBM Plex Mono', monospace",
+            fontSize: 14,
+            lineHeight: 1.4,
+            color: INK,
+            textAlign: "center",
+            animation: "washPromptIn 0.4s ease both",
+          }}
+        >
+          <span aria-hidden style={{ fontSize: 18, flexShrink: 0 }}>🐦</span>
+          <span>{WASH_BEATS[phase].replace(/\*/g, "")}</span>
+        </div>
+      )}
 
       {/* ── LINE-COMPLETE celebration banner (top-center, golden) ── */}
       {celebrating && (

@@ -44,10 +44,21 @@ const ARTIFACT_RADIUS = 0.7;
 export const ZOMBIE_RADIUS = 0.7;
 export const ZOMBIE_STANDOFF = AVATAR_RADIUS + ZOMBIE_RADIUS; // chaser stops here
 
+// Static scenery obstacles (posts, the washer, rocks, tent…) register their
+// collision circle here so the avatar can't walk through them in ANY mode. id →
+// { x, z, r }. Props register on mount and unregister on unmount.
+const obstacles = new Map();
+export function registerObstacle(id, x, z, r) {
+  obstacles.set(id, { x, z, r });
+}
+export function unregisterObstacle(id) {
+  obstacles.delete(id);
+}
+
 /** Push `pos` (a THREE.Vector3, x/z mutated in place) out of any solid it
- *  overlaps: the registered artifacts and (optionally) the chaser zombie. One
- *  pass per frame. Pass includeZombie=false when the MOVER is the zombie itself
- *  (so it collides with artifacts but not with its own circle). */
+ *  overlaps: registered artifacts, static scenery obstacles, and (optionally) the
+ *  chaser zombie. One pass per frame. Pass includeZombie=false when the MOVER is
+ *  the zombie itself (so it collides with scenery but not with its own circle). */
 export function resolveCollisions(pos, selfR = AVATAR_RADIUS, includeZombie = true) {
   const pushOut = (cx, cz, min) => {
     const dx = pos.x - cx;
@@ -63,6 +74,7 @@ export function resolveCollisions(pos, selfR = AVATAR_RADIUS, includeZombie = tr
     }
   };
   registry.forEach((d) => pushOut(d.position.x, d.position.z, selfR + ARTIFACT_RADIUS));
+  obstacles.forEach((o) => pushOut(o.x, o.z, selfR + o.r));
   if (includeZombie && zombieActive) pushOut(zombiePos.x, zombiePos.z, selfR + ZOMBIE_RADIUS);
 }
 

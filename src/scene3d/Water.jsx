@@ -17,6 +17,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { terrainHeight, POND_X, POND_Z, POND_RADIUS, pondEdgeRadius } from "./coords";
 import { seededRng, makeRadialTexture } from "./particleUtils";
+import { registerObstacle, unregisterObstacle } from "../game/gameStore";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 // POND_X/Z/RADIUS come from coords.js (same values the terrain basin is carved
@@ -461,7 +462,7 @@ function buildShoreRocks() {
 // ─── shore rock renderers ─────────────────────────────────────────────────────
 
 /** Single low-poly boulder — icosahedron (detail=0) squashed like Foliage's Rock */
-function ShoreRock({ x, y, z, scale: s, rotY, rockSeed, isLarge, season }) {
+function ShoreRock({ x, y, z, scale: s, rotY, rockSeed, isLarge, slot, season }) {
   const pal = ROCK_PALETTE[season] || ROCK_PALETTE.summer;
   // Alternate between the two palette colours using rockSeed
   const baseColor = rockSeed > 0.5 ? pal.rockA : pal.rockB;
@@ -471,6 +472,14 @@ function ShoreRock({ x, y, z, scale: s, rotY, rockSeed, isLarge, season }) {
   const sx = s * (1.2 + rockSeed * 0.25);
   const sy = s * (0.55 + rockSeed * 0.22);
   const sz = s * (1.0 + rockSeed * 0.18);
+
+  // Big boulders are solid — the avatar collides instead of walking through them.
+  useEffect(() => {
+    if (!isLarge) return undefined;
+    const id = `shorerock-${slot}`;
+    registerObstacle(id, x, z, 0.55 * sx);
+    return () => unregisterObstacle(id);
+  }, [isLarge, slot, x, z, sx]);
 
   // Seat so the rock bottom sits on the terrain (icosa radius ≈ 0.55 * sy)
   const yOffset = 0.55 * sy;

@@ -212,8 +212,9 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     }
     const pos = posRef.current;
     _prev.copy(pos);
-    // smooth re-route: ease toward the goal (snappier while celebrating)
-    const k = Math.min(1, dt * (celebrate ? 4.5 : 2.6));
+    // gentle re-route: ease toward the goal SLOWLY so the player can follow the
+    // bird to the next spot (it used to zip away too fast to follow).
+    const k = Math.min(1, dt * (celebrate ? 2.6 : 1.3));
     pos.lerp(_goal, k);
     g.position.copy(pos);
 

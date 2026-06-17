@@ -24,7 +24,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { avatarPos, avatarActive, useGame } from "./gameStore";
+import { avatarPos, avatarActive, useGame, registerObstacle, unregisterObstacle } from "./gameStore";
 import {
   terrainHeight,
   postLayout,
@@ -601,17 +601,21 @@ function CarriedPanel({ visible, state }) {
     g.current.visible = visible;
     if (!visible) return;
     const t = st.clock.elapsedTime;
+    // float a small folded bundle clearly ABOVE the head (it used to drape down
+    // into the avatar's head). High enough that the panel never overlaps the body.
     g.current.position.set(
       avatarPos.x,
-      avatarPos.y + 2.4 + Math.sin(t * 2.5) * 0.1,
+      avatarPos.y + 3.05 + Math.sin(t * 2.5) * 0.08,
       avatarPos.z
     );
     g.current.rotation.y = Math.sin(t * 0.6) * 0.25;
   });
   return (
     <group ref={g} visible={false}>
-      {/* hang it from a carried point so it drapes downward while bobbing */}
-      <DenimPanel state={state} hung />
+      {/* small carried bundle (scaled down) hovering overhead — not a curtain */}
+      <group scale={0.5}>
+        <DenimPanel state={state} hung />
+      </group>
     </group>
   );
 }
@@ -653,6 +657,12 @@ export function WashDay() {
   useEffect(() => {
     if (playing) resetWash();
   }, [playing]);
+
+  // The washing machine is solid — register it so the avatar can't walk through.
+  useEffect(() => {
+    registerObstacle("washer", WASHER_POS.x, WASHER_POS.z, 1.0);
+    return () => unregisterObstacle("washer");
+  }, []);
 
   // Brief "line complete" celebration window before the About reveal (P1 #6).
   const [celebrate, setCelebrate] = React.useState(false);
