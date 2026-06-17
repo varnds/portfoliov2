@@ -230,8 +230,14 @@ export function Avatar() {
   const idle = useRef(0); // seconds since last movement
   const deathT = useRef(0); // seconds into the death topple (0 = alive)
 
-  const { playing, avatarVariant, cameraMode } = useGame();
+  const { playing, avatarVariant, cameraMode, cameraDist } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
+
+  // Near / Far framing preset → snap the camera distance target (scroll can still
+  // fine-tune afterward).
+  useEffect(() => {
+    distT.current = cameraDist === "far" ? 15 : 8.5;
+  }, [cameraDist]);
 
   useEffect(() => {
     if (!playing) return;
@@ -407,11 +413,6 @@ export function Avatar() {
     const shz = headZ.current / hl;
 
     // ── Camera ────────────────────────────────────────────────────────────────
-    // Yaw target: drag target by default. In "behind" (the default, no-mouse
-    // chase-cam) the camera CONTINUOUSLY follows behind the avatar's heading
-    // while moving, so a non-gamer always looks where they're walking without
-    // touching the mouse. "both" keeps the old gentle settle-on-idle feel.
-    //
     // CRITICAL — no movement feedback loop: the movement basis above reads from
     // yaw.current (the SMOOTHED orbit yaw), and the heading (shx/shz) it chases
     // is derived from the player's INPUT direction, not from the camera. So the
@@ -419,33 +420,40 @@ export function Avatar() {
     // camera never feeds back into the movement basis to curve a held key.
     // (ArrowUp resolves to a fixed world direction per frame; the basis only
     // drifts as yaw eases behind it, which is the chase, not a curl.)
+    // Three follow MODES (all spring-smoothed via smoothDampAngle so the camera
+    // eases in/out as one continuous motion — never lag-then-snap):
+    //   • track  — fixed viewing angle; the camera GLIDES to keep you centered but
+    //              never rotates as you move, so left/right strafing has zero swing.
+    //              The calm default. You can still drag to choose the angle.
+    //   • follow — eases BEHIND your heading, but with a DEADZONE so small left/
+    //              right wiggles don't rotate the view — it only re-centers on a
+    //              real, sustained turn (and more gently than before).
+    //   • free   — pure manual orbit; movement never touches the camera angle.
     let targetYaw = yawT.current;
-    // Manual drag / "free" orbit tracks the mouse promptly; the auto-follow cam
-    // trails more gently. Either way the SPRING below (not an exp lerp) carries
-    // velocity so the camera eases in and out as one continuous motion — no
-    // lag-then-snap when the heading changes.
-    let smoothTime = 0.12;
-    // "both" is the no-mouse auto-follow cam: while moving, the camera sits behind
-    // the avatar's heading so a non-gamer always looks where they walk without
-    // touching the mouse, and biases its focus ahead (below) to show the path.
-    const autoChase = cameraMode === "both" && !drag.current;
-    if (autoChase && moved) {
-      // target the RAW input direction (not the smoothed heading) so the camera
-      // begins moving the same frame the key goes down.
-      targetYaw = Math.atan2(-inDirX.current, -inDirZ.current);
-      yawT.current = targetYaw; // keep manual-drag target in sync for seamless grab
-      smoothTime = 0.3; // gentle, continuous trail behind the heading
-    } else if (autoChase && idle.current > 0.18) {
-      targetYaw = yawT.current; // settled idle: hold the last chase yaw
-      smoothTime = 0.3;
+    let smoothTime = 0.12; // manual / track: track the chosen angle promptly
+    const follow = cameraMode === "follow" && !drag.current;
+    if (follow && moved) {
+      // Heading the player is walking (raw input → no smoothing lag).
+      const headingYaw = Math.atan2(-inDirX.current, -inDirZ.current);
+      // Deadzone: only chase the heading once it diverges from where the camera
+      // already sits by more than ~22°. Small strafes stay put → no whip.
+      let off = headingYaw - yaw.current;
+      off = Math.atan2(Math.sin(off), Math.cos(off));
+      const DEADZONE = 0.38; // ~22°
+      if (Math.abs(off) > DEADZONE) {
+        targetYaw = headingYaw;
+        yawT.current = headingYaw; // keep manual-drag target in sync
+        smoothTime = 0.42; // gentle, continuous trail behind the heading
+      } else {
+        targetYaw = yaw.current; // within deadzone — hold the current angle
+      }
     }
     yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, smoothTime, d);
     pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
-    // Look-ahead ("both") from the SMOOTHED heading; eases to 0 when idle. Small,
-    // so the camera doesn't swing wildly ahead (was 2.6 — felt lurchy).
-    const leadOn = cameraMode === "both" && moved;
+    // Look-ahead (follow mode only) from the SMOOTHED heading; eases to 0 when idle.
+    const leadOn = cameraMode === "follow" && moved;
     const LEAD = 1.2;
     leadX.current = THREE.MathUtils.damp(leadX.current, leadOn ? shx * LEAD : 0, 2.0, dt);
     leadZ.current = THREE.MathUtils.damp(leadZ.current, leadOn ? shz * LEAD : 0, 2.0, dt);

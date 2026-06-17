@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { clotheslinePoint, svgToWorldOnTerrain, terrainHeight } from "./coords";
 import { ROPE, WICKER, WOOD } from "./materials";
+import { OrangeBirdShape } from "./birdShape";
 
 export function ClotheslinePost({ layout, palette, withChime = false, windStrength = 3, onChimeStrike }) {
   const { x, z, footY, height } = layout;
@@ -354,46 +355,7 @@ export function OrangeBird({ show, onChirp }) {
         document.body.style.cursor = "";
       }}
     >
-      <mesh castShadow>
-        <sphereGeometry args={[0.5, 16, 14]} />
-        <meshStandardMaterial color="#EA580C" roughness={0.85} />
-      </mesh>
-      <mesh position={[0.16, -0.16, 0]} scale={[0.85, 0.8, 0.95]}>
-        <sphereGeometry args={[0.42, 16, 14]} />
-        <meshStandardMaterial color="#FCD9A8" roughness={0.9} />
-      </mesh>
-      <mesh position={[0.46, 0.28, 0]} castShadow>
-        <sphereGeometry args={[0.3, 14, 12]} />
-        <meshStandardMaterial color="#F97316" roughness={0.82} />
-      </mesh>
-      <mesh position={[0.74, 0.26, 0]} rotation={[0, 0, -Math.PI / 2]}>
-        <coneGeometry args={[0.08, 0.22, 8]} />
-        <meshStandardMaterial color="#FACC15" roughness={0.6} />
-      </mesh>
-      <mesh position={[0.56, 0.36, 0.14]}>
-        <sphereGeometry args={[0.06, 8, 8]} />
-        <meshStandardMaterial color="#1A1208" roughness={0.4} />
-      </mesh>
-      <mesh position={[0.56, 0.36, -0.14]}>
-        <sphereGeometry args={[0.06, 8, 8]} />
-        <meshStandardMaterial color="#1A1208" roughness={0.4} />
-      </mesh>
-      <mesh position={[-0.5, 0.05, 0]} rotation={[0, 0, 0.5]} castShadow>
-        <coneGeometry args={[0.22, 0.7, 6]} />
-        <meshStandardMaterial color="#C2410C" roughness={0.85} />
-      </mesh>
-      <group ref={leftWing} position={[0, 0.18, 0.12]}>
-        <mesh position={[0, 0, 0.36]} rotation={[0.3, 0, 0]} castShadow>
-          <boxGeometry args={[0.5, 0.05, 0.66]} />
-          <meshStandardMaterial color="#D9480F" roughness={0.85} />
-        </mesh>
-      </group>
-      <group ref={rightWing} position={[0, 0.18, -0.12]}>
-        <mesh position={[0, 0, -0.36]} rotation={[-0.3, 0, 0]} castShadow>
-          <boxGeometry args={[0.5, 0.05, 0.66]} />
-          <meshStandardMaterial color="#D9480F" roughness={0.85} />
-        </mesh>
-      </group>
+      <OrangeBirdShape wingL={leftWing} wingR={rightWing} />
     </group>
   );
 }

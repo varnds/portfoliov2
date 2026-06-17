@@ -1,16 +1,16 @@
-// BirdGuide — a small ORANGE BIRD that flies to the current Wash Day target and
-// speaks the bird's line, replacing the old HUD corner bubble + the floating
-// guide arrow. It is the diegetic guide + narrator: it eases toward the target
-// for the active phase, bobs/circles over it so the player's eye follows, and
-// carries a billboarded SPEECH BUBBLE (drei <Html>) showing WASH_BEATS[phase].
+// BirdGuide — the SAME deep-orange bird that flies around the world (OrangeBird),
+// now acting as a COMPANION guide for Wash Day. Instead of hovering at the
+// destination, it appears beside you at the start of each leg and then leads
+// AHEAD of you toward the current target ("follow me"), so you always know which
+// way to walk and the bird stays in front of you, on-screen.
 //
-// Targets by phase are resolved by WashDay (passed in as `targetRef`, a live
-// THREE.Vector3 it updates each frame): seek→ground denim, carryDirty→washer,
-// washing→washer, carryWet→peg, drying→peg, done→a victory loop near the line.
+// Targets per phase come from WashDay (targetRef, a live THREE.Vector3):
+//   seek→ground denim, carryDirty→washtub, washing→washtub, carryWet→peg,
+//   drying→peg, done→victory loop near the line.
 //
 // Props:
-//   • phase      — current wash phase (drives the spoken beat + flight feel).
-//   • targetRef  — ref holding a THREE.Vector3 of the spot to fly to.
+//   • phase      — current wash phase (drives the spoken beat + when it re-greets).
+//   • targetRef  — ref holding a THREE.Vector3 of the spot to lead you to.
 //   • celebrate  — true during the ~2.5s line-complete beat (victory loop).
 //
 // Scratch vectors are reused; nothing is allocated per frame.
@@ -19,67 +19,20 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { WASH_BEATS } from "./washStory";
+import { avatarPos } from "./gameStore";
+import { terrainHeight } from "../scene3d/coords";
+import { OrangeBirdShape } from "../scene3d/birdShape";
 
 const ACCENT = "#E2725B";
 const INK = "#3A2A20";
 const CREAM = "rgba(255,253,247,0.94)";
 
+// How far ahead of the player the bird hovers while leading (world units).
+const LEAD_AHEAD = 3.2;
+
 // Reusable scratch (no per-frame allocations).
 const _goal = new THREE.Vector3();
 const _prev = new THREE.Vector3();
-
-// ── The little orange bird body (low-poly, matte) ──────────────────────────────
-function BirdBody({ flapRef, wingLRef, wingRRef }) {
-  return (
-    <group ref={flapRef}>
-      {/* body */}
-      <mesh castShadow rotation={[0.2, 0, 0]}>
-        <sphereGeometry args={[0.16, 12, 12]} />
-        <meshStandardMaterial color="#F08A3C" roughness={0.85} metalness={0} />
-      </mesh>
-      {/* belly lighter */}
-      <mesh position={[0, -0.04, 0.08]}>
-        <sphereGeometry args={[0.12, 12, 12]} />
-        <meshStandardMaterial color="#FBC58A" roughness={0.9} metalness={0} />
-      </mesh>
-      {/* head */}
-      <mesh position={[0, 0.12, 0.12]}>
-        <sphereGeometry args={[0.11, 12, 12]} />
-        <meshStandardMaterial color="#F2933F" roughness={0.85} metalness={0} />
-      </mesh>
-      {/* beak */}
-      <mesh position={[0, 0.11, 0.23]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.04, 0.1, 8]} />
-        <meshStandardMaterial color="#E8B23C" roughness={0.7} metalness={0} />
-      </mesh>
-      {/* eyes */}
-      {[-0.05, 0.05].map((x, i) => (
-        <mesh key={i} position={[x, 0.15, 0.2]}>
-          <sphereGeometry args={[0.018, 8, 8]} />
-          <meshStandardMaterial color="#241712" roughness={0.5} metalness={0} />
-        </mesh>
-      ))}
-      {/* tail */}
-      <mesh position={[0, -0.02, -0.16]} rotation={[0.5, 0, 0]}>
-        <coneGeometry args={[0.07, 0.18, 6]} />
-        <meshStandardMaterial color="#D9722B" roughness={0.85} metalness={0} />
-      </mesh>
-      {/* wings (flap) */}
-      <group ref={wingLRef} position={[-0.13, 0.02, 0]}>
-        <mesh position={[-0.1, 0, 0]} rotation={[0, 0, 0.3]}>
-          <boxGeometry args={[0.22, 0.03, 0.13]} />
-          <meshStandardMaterial color="#E07A2E" roughness={0.85} metalness={0} />
-        </mesh>
-      </group>
-      <group ref={wingRRef} position={[0.13, 0.02, 0]}>
-        <mesh position={[0.1, 0, 0]} rotation={[0, 0, -0.3]}>
-          <boxGeometry args={[0.22, 0.03, 0.13]} />
-          <meshStandardMaterial color="#E07A2E" roughness={0.85} metalness={0} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
 
 // ── The speech bubble attached to the bird (drei Html, billboarded) ─────────────
 function SpeechBubble({ text }) {
@@ -95,11 +48,10 @@ function SpeechBubble({ text }) {
       wrapperClass="bird-bubble-wrapper"
     >
       <div
-        // keyed on text so it re-pops on each new beat
         key={text}
         style={{
           position: "relative",
-          width: 210, // fixed width so text wraps into a readable card, not 1 word/line
+          width: 210,
           whiteSpace: "normal",
           wordBreak: "normal",
           overflowWrap: "break-word",
@@ -118,7 +70,6 @@ function SpeechBubble({ text }) {
         }}
       >
         <Beat text={text} />
-        {/* little tail pointing down to the bird */}
         <span
           style={{
             position: "absolute",
@@ -176,11 +127,10 @@ function Beat({ text }) {
 
 export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const root = useRef();
-  const flap = useRef();
   const wingL = useRef();
   const wingR = useRef();
-  // current flown position (smoothed toward the goal); lazily initialized.
-  const posRef = useRef(null);
+  const posRef = useRef(null); // current flown position (smoothed)
+  const lastPhase = useRef(phase); // re-greet (start beside player) on phase change
 
   const line = useMemo(() => WASH_BEATS[phase] || "", [phase]);
 
@@ -196,47 +146,65 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     }
     g.visible = true;
 
-    // Hover offset above the target so the bird circles ABOVE it (eye-catching).
-    // While celebrating, fly a wider victory loop near the line.
-    const circleR = celebrate ? 1.4 : 0.8;
-    const circleSpd = celebrate ? 2.6 : 1.1;
-    const hoverY = celebrate ? 2.4 : 1.45;
+    const a = avatarPos; // live player position
+    const dx = target.x - a.x;
+    const dz = target.z - a.z;
+    const dist = Math.hypot(dx, dz) || 0.0001;
+
+    // On a NEW leg, snap the bird beside the player so it visibly comes to you and
+    // then pulls ahead — "follow me".
+    if (lastPhase.current !== phase) {
+      lastPhase.current = phase;
+      if (posRef.current) posRef.current.set(a.x, a.y + 1.7, a.z);
+    }
+
+    // Hover point: lead the player by LEAD_AHEAD toward the target, but never past
+    // it — once you arrive, the bird settles right over the spot to mark it.
+    const lead = celebrate ? 0 : Math.min(LEAD_AHEAD, dist);
+    const baseX = dist > 0.4 ? a.x + (dx / dist) * lead : target.x;
+    const baseZ = dist > 0.4 ? a.z + (dz / dist) * lead : target.z;
+    const hoverY = celebrate ? 2.4 : 1.7;
+    const circleR = celebrate ? 1.4 : 0.32; // tight bob while leading; wide victory loop
+    const circleSpd = celebrate ? 2.6 : 1.3;
+    // Hover a fixed height above the GROUND at its location (not the avatar's Y —
+    // which is high mid sky-drop and would fling the bird into the sky).
+    const baseY = celebrate ? target.y : terrainHeight(baseX, baseZ);
     _goal.set(
-      target.x + Math.cos(t * circleSpd) * circleR,
-      target.y + hoverY + Math.sin(t * 1.6) * 0.18,
-      target.z + Math.sin(t * circleSpd) * circleR
+      baseX + Math.cos(t * circleSpd) * circleR,
+      baseY + hoverY + Math.sin(t * 1.6) * 0.16,
+      baseZ + Math.sin(t * circleSpd) * circleR
     );
 
-    if (!posRef.current) {
-      posRef.current = _goal.clone();
-    }
+    if (!posRef.current) posRef.current = _goal.clone();
     const pos = posRef.current;
     _prev.copy(pos);
-    // gentle re-route: ease toward the goal SLOWLY so the player can follow the
-    // bird to the next spot (it used to zip away too fast to follow).
-    const k = Math.min(1, dt * (celebrate ? 2.6 : 1.3));
+    // Ease toward the goal quickly enough to keep pace ahead of a walking player,
+    // but still smooth.
+    const k = Math.min(1, dt * (celebrate ? 2.6 : 2.4));
     pos.lerp(_goal, k);
     g.position.copy(pos);
 
-    // face direction of travel
-    const dx = pos.x - _prev.x;
-    const dz = pos.z - _prev.z;
-    if (dx * dx + dz * dz > 1e-6) {
-      g.rotation.y = Math.atan2(dx, dz);
+    // Face the way it's flying (local forward is +X → atan2(-dz, dx)); when nearly
+    // still, look toward the target so it points the way.
+    const mdx = pos.x - _prev.x;
+    const mdz = pos.z - _prev.z;
+    if (mdx * mdx + mdz * mdz > 1e-6) {
+      g.rotation.y = Math.atan2(-mdz, mdx);
+    } else if (dist > 0.4) {
+      g.rotation.y = Math.atan2(-dz, dx);
     }
+    g.rotation.z = Math.sin(t * 0.7) * 0.12 + (celebrate ? 0.35 : 0);
 
-    // wing flap + body bob
-    const flapAmt = Math.sin(t * (celebrate ? 22 : 14)) * 0.7;
-    if (wingL.current) wingL.current.rotation.z = 0.3 + flapAmt;
-    if (wingR.current) wingR.current.rotation.z = -0.3 - flapAmt;
-    if (flap.current) flap.current.position.y = Math.sin(t * 6) * 0.03;
+    // wing flap
+    const flap = Math.sin(t * (celebrate ? 22 : 12)) * 0.7 + 0.2;
+    if (wingL.current) wingL.current.rotation.z = flap;
+    if (wingR.current) wingR.current.rotation.z = -flap;
   });
 
   return (
     <group ref={root}>
-      {/* scale the little bird up so it reads clearly next to its speech bubble */}
-      <group scale={2.0}>
-        <BirdBody flapRef={flap} wingLRef={wingL} wingRRef={wingR} />
+      <group scale={0.8}>
+        <OrangeBirdShape wingL={wingL} wingR={wingR} />
       </group>
       {/* hide the bubble during the celebration loop (HUD banner takes over) */}
       {!celebrate && <SpeechBubble text={line} />}

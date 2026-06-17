@@ -103,7 +103,8 @@ let state = {
   welcomeSeen: false, // welcome card dismissed
   nearTarget: null, // { id, buried } — the discoverable you're standing by
   avatarVariant: DEFAULT_AVATAR, // one of the ids in avatarConfig AVATARS
-  cameraMode: "both", // "both" (auto-follow + look-ahead) | "free" (manual)
+  cameraMode: "track", // "track" (fixed angle, glide) | "follow" (eases behind heading) | "free" (manual orbit)
+  cameraDist: "near", // "near" | "far" — framing distance preset
 };
 
 const listeners = new Set();
@@ -175,6 +176,12 @@ export function setAvatarVariant(v) {
 export function setCameraMode(m) {
   if (state.cameraMode === m) return;
   state = { ...state, cameraMode: m };
+  emit();
+}
+
+export function setCameraDist(d) {
+  if (state.cameraDist === d) return;
+  state = { ...state, cameraDist: d };
   emit();
 }
 

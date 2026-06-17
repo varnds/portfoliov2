@@ -30,9 +30,6 @@ import {
   postLayout,
   clotheslineEnds,
   clotheslinePoint,
-  POND_X,
-  POND_Z,
-  POND_RADIUS,
 } from "../scene3d/coords";
 import { buildFlatPanel } from "../scene3d/clothGarment";
 import {
@@ -57,20 +54,22 @@ const LINE = clotheslineEnds(LEFT_POST, RIGHT_POST);
 const PEG_T = 0.9;
 const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the rope
 
-// Washing machine near the camp tent (~[14,0,10]); grounded on the terrain.
-const WASHER_XZ = [10, 13];
+// ── A gently-arcing route the bird leads you along (no sharp left↔right): you
+// start at spawn (~0,16), stroll front-LEFT to the muddy denim by the water, the
+// bird then leads you RIGHT across the yard to the washtub, and finally a short
+// step back to the empty peg on the line. One smooth sweep, bird always ahead.
+//
+// Dirty denim lying on the grass by the pond's edge (front-left).
+const SEEK_XZ = [-5, 11];
+const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
+// Washtub set up in the yard, front-and-centre-right (pulled in from the tent so
+// the leg from the denim isn't a long cross-map dash).
+const WASHER_XZ = [5, 8];
 const WASHER_POS = new THREE.Vector3(
   WASHER_XZ[0],
   terrainHeight(WASHER_XZ[0], WASHER_XZ[1]),
   WASHER_XZ[1]
 );
-// Drop spot for the dirty denim: by the pond edge, away from washer + line.
-const SEEK_XZ = (() => {
-  const x = POND_X + (POND_RADIUS + 3.0) * Math.cos(-0.5);
-  const z = POND_Z + (POND_RADIUS + 3.0) * Math.sin(-0.5);
-  return [x, z];
-})();
-const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
 
 const PEG_POS = new THREE.Vector3(PEG_POINT[0], PEG_POINT[1], PEG_POINT[2]);
 
