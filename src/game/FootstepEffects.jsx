@@ -126,7 +126,7 @@ const FX = {
   },
   autumn: {
     // actual little leaves that flutter and tumble down
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 2, up: 0.7, out: 1.0, grav: -1.4,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 1, up: 0.7, out: 1.0, grav: -1.4,
     life: 1.3, size: 0.22, drift: 0.5, soft: false, leaf: true, sway: 0.9,
     scuff: { color: "#CE9456", r: 0.52, life: 0.5, alpha: 0.3 },
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
@@ -339,7 +339,7 @@ export function FootstepEffects({ seasonKey }) {
   });
 
   function emitPuff(fx, x, z, groundY, dirX, dirZ, mult, lifeMult) {
-    const count = Math.max(3, Math.round(fx.n * mult));
+    const count = Math.max(1, Math.round(fx.n * mult)); // allow truly sparse seasons (leaves/flowers)
     const tex = fx.flower
       ? pool.flowerTex
       : fx.leaf
