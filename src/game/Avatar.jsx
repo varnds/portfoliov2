@@ -353,17 +353,19 @@ export function Avatar() {
     // drifts as yaw eases behind it, which is the chase, not a curl.)
     let targetYaw = yawT.current;
     let yawLambda = 9;
-    if (cameraMode === "behind" && !drag.current && moved) {
-      // While walking: snappy-but-smooth chase that sits behind the heading.
-      // Frame-rate-independent exp damping (below) at a quick lambda keeps it
-      // responsive like "free" without jerk or jitter. Keep the manual drag
-      // target in sync so a grab hands over seamlessly.
+    // "behind" and "lead" are both no-mouse auto-follow cams: the camera
+    // continuously sits behind the avatar's heading while moving, so a non-gamer
+    // always looks where they walk without touching the mouse. They differ only
+    // in the focus offset below — "lead" biases the focus AHEAD so you see more
+    // of the path in front. Frame-rate-independent exp damping at a quick lambda
+    // keeps them responsive like "free" without jerk or jitter.
+    const autoChase = (cameraMode === "behind" || cameraMode === "lead") && !drag.current;
+    if (autoChase && moved) {
       targetYaw = Math.atan2(-shx, -shz);
-      yawT.current = targetYaw;
+      yawT.current = targetYaw; // keep manual-drag target in sync for seamless grab
       yawLambda = 6;
-    } else if (cameraMode === "behind" && !drag.current && idle.current > 0.18) {
-      // Settled idle: hold the last chase yaw (already synced into yawT above).
-      targetYaw = yawT.current;
+    } else if (autoChase && idle.current > 0.18) {
+      targetYaw = yawT.current; // settled idle: hold the last chase yaw
       yawLambda = 6;
     } else if (cameraMode === "both" && !drag.current && idle.current > 0.18) {
       targetYaw = Math.atan2(-shx, -shz);

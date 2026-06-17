@@ -100,8 +100,8 @@ const FX = {
   },
   autumn: {
     // actual little leaves that flutter and tumble down
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 4, up: 0.7, out: 1.0, grav: -1.4,
-    life: 1.3, size: 0.15, drift: 0.5, soft: false, leaf: true, sway: 0.9,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 2, up: 0.7, out: 1.0, grav: -1.4,
+    life: 1.3, size: 0.22, drift: 0.5, soft: false, leaf: true, sway: 0.9,
     scuff: { color: "#CE9456", r: 0.52, life: 0.5, alpha: 0.3 },
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },

@@ -16,9 +16,9 @@ import { WATER_Y } from "../../scene3d/Water";
 // bottle visible above water) rather than burying its centre.
 const BX = POND_X;
 const BZ = POND_Z + 2; // a touch toward the visible front of the pond
-// On-its-side body radius ≈ 0.16 * 0.7 scale ≈ 0.11. Lift the centre ~0.04 above
-// the surface so the waterline sits near the lower third of the bottle.
-const FREEBOARD = 0.04;
+// On-its-side body radius ≈ 0.16 * 0.9 scale ≈ 0.14. Lift the centre ~0.06 above
+// the surface so the waterline sits near the lower third of the (larger) bottle.
+const FREEBOARD = 0.06;
 const FLOAT_BASE = (WATER_Y + FREEBOARD) - terrainHeight(BX, BZ);
 
 export function MessageBottle() {
@@ -49,7 +49,7 @@ export function MessageBottle() {
     >
       {/* groupRef gets the bob/roll; inner group lays it on its side at ~0.7 long */}
       <group ref={groupRef}>
-        <group rotation={rotation} scale={0.7}>
+        <group rotation={rotation} scale={0.9}>
           {/* Glass body */}
           <mesh castShadow>
             <cylinderGeometry args={[0.16, 0.16, 0.6, 10]} />
