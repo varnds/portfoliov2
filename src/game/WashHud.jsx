@@ -1,15 +1,18 @@
-// WashHud — DOM overlay for WASH DAY mode: the orange bird's narration beats +
-// per-phase prompts, the F-key / button that drives wash & dry (cozy timer +
-// hold-to-spin/fan mini-interaction), progress bars, and the final About reveal
-// when the jacket is hung clean & dry.
+// WashHud — DOM overlay for WASH DAY mode: per-phase action prompts, the F-key /
+// button that drives wash & dry (cozy timer + hold-to-spin/fan mini-interaction),
+// the progress bars, a brief golden LINE-COMPLETE banner, and the final About
+// reveal when the denim is hung clean & dry.
 //
-// State machine lives in washStore.js — this layer only narrates + drives input.
+// The bird now SPEAKS IN-WORLD (BirdGuide.jsx), so this layer no longer renders
+// the old corner 🐦 narration bubble — it only narrates via prompts + drives input.
+//
+// State machine lives in washStore.js — this layer only prompts + drives input.
 // The in-world layer (WashDay.jsx) reads `holding` and fills washP/dryP each
 // frame; here we just call startWashing/startDrying and toggle holding via F.
 //
 // Self-gates on gameMode === "wash" && playing. pointerEvents: none on the wrapper
 // so the 3D world stays draggable; only the buttons re-enable pointer events.
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useGame, endGame } from "./gameStore";
 import {
   useWash,
@@ -17,29 +20,21 @@ import {
   startDrying,
   setHolding,
 } from "./washStore";
+import { LINE_COMPLETE, ABOUT } from "./washStory";
 
 const ACCENT = "#E2725B";
 const INK = "#3A2A20";
 const SUBINK = "#5A463A";
-const CREAM = "rgba(255,253,247,0.82)";
+const GOLD = "#E7B36A";
 
-// Bird narration — one warm, first-person beat per phase (the orange bird is
-// helping Varna get the line dry).
-const BEATS = {
-  seek: "There it is — my denim jacket. And it's *filthy*. Go grab it!",
-  carryDirty: "Got it! Now take it to the washing machine by the tent.",
-  washing: "Pop it in — HOLD F to run the wash.",
-  carryWet: "Spotless! But soaking. Carry it to the empty peg on the line.",
-  drying: "Hang it up — HOLD F to fan it dry in the breeze.",
-  done: "Clean, dry, and back on the line. That's the whole story — come meet me.",
-};
-
-// Placeholder about-me copy — swap with real bio later.
-const ABOUT_PARAGRAPHS = [
-  "I'm Varna — a designer-developer who likes building small worlds you can wander into. Most of my work lives at the seam where playful interaction meets careful craft.",
-  "I care about the texture of an experience: the weight of a transition, the warmth of a palette, the little moment of delight when something responds the way you hoped it would.",
-  "When I'm not arranging pixels (or wringing out denim), you'll find me chasing good light, slow coffee, and the next idea worth prototyping.",
-];
+// Phase prompts that drive the F-key / button (null = no action available).
+function promptFor(phase, nearWasher, nearPeg, washP, dryP) {
+  if (phase === "carryDirty" && nearWasher) return { prompt: "Press F to load the washer" };
+  if (phase === "washing") return { prompt: "HOLD F to spin", isHold: true, progress: washP, progressLabel: "WASH" };
+  if (phase === "carryWet" && nearPeg) return { prompt: "Press F to hang it" };
+  if (phase === "drying") return { prompt: "HOLD F to fan", isHold: true, progress: dryP, progressLabel: "DRY" };
+  return null;
+}
 
 export function WashHud() {
   const { gameMode, playing } = useGame();
@@ -54,10 +49,22 @@ export function WashHud() {
   // setHolding (keydown fires repeatedly while a key is held).
   const fHeldRef = useRef(false);
 
-  // Latest phase / proximity for the key handler (avoids re-binding listeners
-  // every render).
+  // Latest phase / proximity for the key handler (avoids re-binding listeners).
   const ctx = useRef({ phase, nearWasher, nearPeg });
   ctx.current = { phase, nearWasher, nearPeg };
+
+  // Line-complete celebration window: when phase flips to "done" we show a golden
+  // banner for ~2.5s, THEN reveal About (P1 #6 — the visual win lands first).
+  const [showAbout, setShowAbout] = useState(false);
+  useEffect(() => {
+    if (phase === "done") {
+      setShowAbout(false);
+      const id = setTimeout(() => setShowAbout(true), 2500);
+      return () => clearTimeout(id);
+    }
+    setShowAbout(false);
+    return undefined;
+  }, [phase]);
 
   // ── Global F-key handling ──────────────────────────────────────────────────
   // F ONLY — never Space (Space is the avatar jump). One keydown/keyup pair,
@@ -68,7 +75,6 @@ export function WashHud() {
     const onDown = (e) => {
       if (!activeRef.current || !isF(e)) return;
       const { phase: ph, nearWasher: nw, nearPeg: np } = ctx.current;
-      // ignore OS/browser auto-repeat
       if (e.repeat || fHeldRef.current) {
         if (ph === "washing" || ph === "drying") e.preventDefault();
         return;
@@ -91,7 +97,6 @@ export function WashHud() {
       if (!isF(e)) return;
       if (!fHeldRef.current) return;
       fHeldRef.current = false;
-      // always release the hold (cheap no-op if not holding)
       setHolding(false);
     };
 
@@ -105,8 +110,7 @@ export function WashHud() {
     };
   }, []);
 
-  // Safety: if we leave play (or change phase away from a hold phase) while F is
-  // still down, release the hold so it can't get stuck on.
+  // Safety: release the hold if we leave play while F is still down.
   useEffect(() => {
     if (!activeRef.current && fHeldRef.current) {
       fHeldRef.current = false;
@@ -135,26 +139,11 @@ export function WashHud() {
     else if (ph === "carryWet" && np) startDrying();
   };
 
-  // What the contextual prompt + button should say (null = no action available).
-  let prompt = null;
-  let isHold = false;
-  let progress = 0;
-  let progressLabel = "";
-  if (phase === "carryDirty" && nearWasher) {
-    prompt = "Press F to load the washer";
-  } else if (phase === "washing") {
-    prompt = "HOLD F to spin";
-    isHold = true;
-    progress = washP;
-    progressLabel = "WASH";
-  } else if (phase === "carryWet" && nearPeg) {
-    prompt = "Press F to hang it";
-  } else if (phase === "drying") {
-    prompt = "HOLD F to fan";
-    isHold = true;
-    progress = dryP;
-    progressLabel = "DRY";
-  }
+  const p = promptFor(phase, nearWasher, nearPeg, washP, dryP) || {};
+  const { prompt = null, isHold = false, progress = 0, progressLabel = "" } = p;
+
+  // Celebration banner shows the moment we hit "done" and before About reveals.
+  const celebrating = phase === "done" && !showAbout;
 
   return (
     <div
@@ -167,14 +156,6 @@ export function WashHud() {
       }}
     >
       <style>{`
-        @keyframes washBubbleIn {
-          from { opacity: 0; transform: translateY(8px) scale(0.96); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); }
-        }
-        @keyframes washBob {
-          0%, 100% { transform: translateY(0) rotate(-3deg); }
-          50%      { transform: translateY(-4px) rotate(3deg); }
-        }
         @keyframes washPromptIn {
           from { opacity: 0; transform: translateX(-50%) translateY(10px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -188,64 +169,63 @@ export function WashHud() {
           from { opacity: 0; transform: translateY(18px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes washBannerIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(0.96); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
         .wash-pill { transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease; }
         .wash-pill:hover { transform: translateY(-2px); }
         .wash-pill:active { transform: translateY(0); }
         @media (prefers-reduced-motion: reduce) {
           .wash-anim { animation-duration: 0.001s !important; animation-delay: 0s !important; }
-          .wash-bird { animation: none !important; }
         }
       `}</style>
 
-      {/* ── Bird narration (top-left corner) ── */}
-      {phase !== "done" && (
+      {/* ── LINE-COMPLETE celebration banner (top-center, golden) ── */}
+      {celebrating && (
         <div
+          className="wash-anim"
+          role="status"
+          aria-live="polite"
           style={{
             position: "absolute",
-            top: 20,
-            left: 20,
-            maxWidth: "min(340px, 70vw)",
-            display: "flex",
-            alignItems: "flex-end",
-            gap: 10,
+            top: "12%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            textAlign: "center",
+            padding: "18px 30px",
+            borderRadius: 18,
+            background:
+              "linear-gradient(135deg, rgba(255,248,232,0.96), rgba(247,222,178,0.94))",
+            border: `1.5px solid ${GOLD}`,
+            boxShadow: "0 14px 40px rgba(183,144,47,0.34)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            animation: "washBannerIn 0.55s cubic-bezier(0.2,0.7,0.3,1) both",
           }}
         >
           <div
-            className="wash-bird"
-            aria-hidden
             style={{
-              fontSize: 38,
-              lineHeight: 1,
-              flex: "0 0 auto",
-              filter: "drop-shadow(0 4px 8px rgba(58,42,32,0.25))",
-              animation: "washBob 2.4s ease-in-out infinite",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: 3,
+              textTransform: "uppercase",
+              color: "#B8902F",
+              marginBottom: 8,
             }}
           >
-            🐦
+            🧺 {LINE_COMPLETE.kicker}
           </div>
-          {/* keyed on phase so the bubble re-animates each beat */}
           <div
-            key={phase}
-            className="wash-anim"
-            role="status"
-            aria-live="polite"
             style={{
-              position: "relative",
-              background: CREAM,
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              borderRadius: 16,
-              borderTopLeftRadius: 4,
-              padding: "11px 14px",
-              boxShadow: "0 8px 24px rgba(58,42,32,0.16)",
-              border: "1px solid rgba(226,114,91,0.16)",
-              fontSize: 13,
-              lineHeight: 1.45,
+              fontFamily: "'Fraunces', serif",
+              fontSize: "clamp(20px, 3.2vw, 30px)",
+              fontWeight: 600,
               color: INK,
-              animation: "washBubbleIn 0.42s cubic-bezier(0.2,0.7,0.3,1) both",
+              lineHeight: 1.1,
             }}
           >
-            <Beat text={BEATS[phase] || ""} />
+            {LINE_COMPLETE.line}
           </div>
         </div>
       )}
@@ -335,27 +315,9 @@ export function WashHud() {
         </div>
       )}
 
-      {/* ── About reveal (done) ── */}
-      {phase === "done" && <AboutReveal />}
+      {/* ── About reveal (after the celebration beat) ── */}
+      {showAbout && <AboutReveal />}
     </div>
-  );
-}
-
-// Renders the narration text with *emphasis* spans (the seek beat says *filthy*).
-function Beat({ text }) {
-  const parts = String(text).split(/(\*[^*]+\*)/g).filter(Boolean);
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.startsWith("*") && p.endsWith("*") ? (
-          <em key={i} style={{ color: ACCENT, fontStyle: "italic" }}>
-            {p.slice(1, -1)}
-          </em>
-        ) : (
-          <span key={i}>{p}</span>
-        )
-      )}
-    </>
   );
 }
 
@@ -363,7 +325,7 @@ function AboutReveal() {
   return (
     <div
       role="dialog"
-      aria-label="About Varna"
+      aria-label={ABOUT.eyebrow}
       style={{
         position: "fixed",
         inset: 0,
@@ -398,7 +360,7 @@ function AboutReveal() {
             animation: "washHeadIn 0.8s ease both",
           }}
         >
-          🧺 The line is dry — thanks for the help
+          {ABOUT.eyebrow}
         </div>
 
         <h1
@@ -414,10 +376,10 @@ function AboutReveal() {
             animationDelay: "0.08s",
           }}
         >
-          About Varna — the whole line, finally dry.
+          {ABOUT.headline}
         </h1>
 
-        {ABOUT_PARAGRAPHS.map((p, i) => (
+        {ABOUT.paragraphs.map((para, i) => (
           <p
             key={i}
             className="wash-anim"
@@ -433,26 +395,9 @@ function AboutReveal() {
               animationDelay: `${0.4 + i * 0.14}s`,
             }}
           >
-            {p}
+            {para}
           </p>
         ))}
-
-        <p
-          className="wash-anim"
-          style={{
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: 11,
-            fontStyle: "italic",
-            letterSpacing: 0.5,
-            color: "#B9A893",
-            margin: "8px auto 26px",
-            opacity: 0,
-            animation: "washBodyIn 0.6s ease both",
-            animationDelay: `${0.4 + ABOUT_PARAGRAPHS.length * 0.14}s`,
-          }}
-        >
-          (placeholder copy — real about-me text coming soon)
-        </p>
 
         <button
           className="wash-pill wash-anim"
@@ -472,10 +417,11 @@ function AboutReveal() {
             boxShadow: "0 10px 26px rgba(226,114,91,0.34)",
             opacity: 0,
             animation: "washBodyIn 0.7s ease both",
-            animationDelay: `${0.5 + ABOUT_PARAGRAPHS.length * 0.14}s`,
+            animationDelay: `${0.5 + ABOUT.paragraphs.length * 0.14}s`,
+            marginTop: 10,
           }}
         >
-          ← Back to the world
+          ← {ABOUT.cta}
         </button>
       </div>
     </div>
