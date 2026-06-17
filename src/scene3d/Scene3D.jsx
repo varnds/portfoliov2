@@ -138,7 +138,7 @@ function SceneContents(props) {
       <Snowfall seasonKey={seasonKey} />
       <FrostSparkles seasonKey={seasonKey} />
       <SceneEnvironment {...props} showSun={showSun} isNight={isNight} seasonKey={seasonKey} />
-      <GameLayer />
+      <GameLayer seasonKey={seasonKey} />
       <ExploreControls
         cameraPreset={cameraPreset}
         entryKey={props.entryKey}
