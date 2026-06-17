@@ -38,7 +38,7 @@ let state = {
   welcomeSeen: false, // welcome card dismissed
   nearTarget: null, // { id, buried } — the discoverable you're standing by
   avatarVariant: DEFAULT_AVATAR, // one of the ids in avatarConfig AVATARS
-  cameraMode: "behind", // "behind" | "lead" | "both" | "free"
+  cameraMode: "both", // "both" (auto-follow + look-ahead) | "free" (manual)
 };
 
 const listeners = new Set();

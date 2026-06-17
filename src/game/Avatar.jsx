@@ -353,13 +353,13 @@ export function Avatar() {
     // drifts as yaw eases behind it, which is the chase, not a curl.)
     let targetYaw = yawT.current;
     let yawLambda = 9;
-    // "behind" and "lead" are both no-mouse auto-follow cams: the camera
-    // continuously sits behind the avatar's heading while moving, so a non-gamer
-    // always looks where they walk without touching the mouse. They differ only
-    // in the focus offset below — "lead" biases the focus AHEAD so you see more
-    // of the path in front. Frame-rate-independent exp damping at a quick lambda
-    // keeps them responsive like "free" without jerk or jitter.
-    const autoChase = (cameraMode === "behind" || cameraMode === "lead") && !drag.current;
+    // "both" is the no-mouse auto-follow cam: the camera continuously sits behind
+    // the avatar's heading while moving (so a non-gamer always looks where they
+    // walk without touching the mouse) AND biases its focus ahead (below) to show
+    // more of the path in front. Frame-rate-independent exp damping at a quick
+    // lambda keeps it responsive like "free" without jerk or jitter. "free" is
+    // pure manual orbit.
+    const autoChase = cameraMode === "both" && !drag.current;
     if (autoChase && moved) {
       targetYaw = Math.atan2(-shx, -shz);
       yawT.current = targetYaw; // keep manual-drag target in sync for seamless grab
@@ -367,10 +367,6 @@ export function Avatar() {
     } else if (autoChase && idle.current > 0.18) {
       targetYaw = yawT.current; // settled idle: hold the last chase yaw
       yawLambda = 6;
-    } else if (cameraMode === "both" && !drag.current && idle.current > 0.18) {
-      targetYaw = Math.atan2(-shx, -shz);
-      yawT.current = targetYaw; // keep manual target in sync for seamless drag
-      yawLambda = 2.2; // slow, gentle settle
     }
     let dy = targetYaw - yaw.current;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -378,8 +374,8 @@ export function Avatar() {
     pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
-    // Lead look-ahead (lead/both) from the SMOOTHED heading; eases to 0 when idle.
-    const leadOn = (cameraMode === "lead" || cameraMode === "both") && moved;
+    // Look-ahead ("both") from the SMOOTHED heading; eases to 0 when idle.
+    const leadOn = cameraMode === "both" && moved;
     const LEAD = 2.6;
     leadX.current = THREE.MathUtils.damp(leadX.current, leadOn ? shx * LEAD : 0, 2.5, dt);
     leadZ.current = THREE.MathUtils.damp(leadZ.current, leadOn ? shz * LEAD : 0, 2.5, dt);

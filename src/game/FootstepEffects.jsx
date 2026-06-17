@@ -67,6 +67,31 @@ function makeLeafTexture() {
   return tex;
 }
 
+// Small 5-petal flower for spring — tinted per particle and tumbled as it drifts.
+function makeFlowerTexture() {
+  const s = 40;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const ctx = cv.getContext("2d");
+  ctx.translate(s / 2, s / 2);
+  ctx.fillStyle = "#ffffff";
+  const petalR = s * 0.18;
+  const petalDist = s * 0.18;
+  for (let i = 0; i < 5; i += 1) {
+    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a) * petalDist, Math.sin(a) * petalDist, petalR, petalR * 0.6, a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "rgba(70,45,20,0.3)"; // darker heart so the bloom reads after tint
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 const PUFF_POOL = 200;
 const PRINT_POOL = 16;
 const SCUFF_POOL = 28;
@@ -93,8 +118,9 @@ const FX = {
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
   spring: {
-    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 12, up: 0.45, out: 1.0, grav: -3.0,
-    life: 0.5, size: 0.022, drift: 0.4, soft: false,
+    // little flowers that puff out and tumble down
+    colors: ["#F4B6C2", "#FFF1F4", "#FFE08A", "#E5C2F0", "#F6A6A0"], n: 7, up: 0.6, out: 1.0, grav: -1.8,
+    life: 1.0, size: 0.11, drift: 0.4, soft: false, flower: true, sway: 0.8,
     scuff: { color: "#B7CE9C", r: 0.48, life: 0.45, alpha: 0.26 },
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
   },
@@ -120,6 +146,7 @@ export function FootstepEffects({ seasonKey }) {
     const grainTex = makeGrainTexture();
     const flakeTex = makeRadialTexture(1, 0.6, 0);
     const leafTex = makeLeafTexture();
+    const flowerTex = makeFlowerTexture();
     const printTex = makeRadialTexture(1, 0.7, 0);
     const scuffTex = makeRadialTexture(0.8, 0.32, 0); // soft hollow-ish dust ring
 
@@ -177,7 +204,7 @@ export function FootstepEffects({ seasonKey }) {
     }
 
     return {
-      grainTex, flakeTex, leafTex, printTex, scuffTex, printGeo,
+      grainTex, flakeTex, leafTex, flowerTex, printTex, scuffTex, printGeo,
       puffGroup, puffs, printGroup, prints, scuffGroup, scuffs,
     };
   }, []);
@@ -187,6 +214,7 @@ export function FootstepEffects({ seasonKey }) {
       pool.grainTex.dispose();
       pool.flakeTex.dispose();
       pool.leafTex.dispose();
+      pool.flowerTex.dispose();
       pool.printTex.dispose();
       pool.scuffTex.dispose();
       pool.printGeo.dispose();
@@ -312,7 +340,13 @@ export function FootstepEffects({ seasonKey }) {
 
   function emitPuff(fx, x, z, groundY, dirX, dirZ, mult, lifeMult) {
     const count = Math.max(3, Math.round(fx.n * mult));
-    const tex = fx.leaf ? pool.leafTex : fx.soft ? pool.flakeTex : pool.grainTex;
+    const tex = fx.flower
+      ? pool.flowerTex
+      : fx.leaf
+        ? pool.leafTex
+        : fx.soft
+          ? pool.flakeTex
+          : pool.grainTex;
     for (let i = 0; i < count; i += 1) {
       const p = pool.puffs[puffCursor.current];
       puffCursor.current = (puffCursor.current + 1) % pool.puffs.length;
@@ -331,7 +365,7 @@ export function FootstepEffects({ seasonKey }) {
       p.life = p.maxLife;
       p.base = fx.size * (0.6 + Math.random() * 0.9); // varied grain/leaf sizes
       p.groundY = groundY;
-      p.leaf = !!fx.leaf;
+      p.leaf = !!(fx.leaf || fx.flower); // tumble/flutter applies to leaves AND flowers
       if (p.leaf) {
         p.phase = Math.random() * Math.PI * 2;
         p.spin = (Math.random() - 0.5) * 5; // tumble speed/direction

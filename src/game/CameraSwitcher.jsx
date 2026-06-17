@@ -3,8 +3,6 @@ import React from "react";
 import { useGame, setCameraMode } from "./gameStore";
 
 const MODES = [
-  { id: "behind", label: "Behind" },
-  { id: "lead", label: "Lead" },
   { id: "both", label: "Both" },
   { id: "free", label: "Free" },
 ];
