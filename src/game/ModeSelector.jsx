@@ -7,6 +7,7 @@ const MODES = [
   { id: "chase", label: "🧟 Chase" },
   { id: "socks", label: "🧦 Socks" },
   { id: "camera", label: "📷 Camera" },
+  { id: "wash", label: "🧺 Wash Day" },
 ];
 
 export function ModeSelector({ visible }) {

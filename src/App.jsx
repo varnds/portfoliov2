@@ -70,6 +70,7 @@ import { DeathOverlay } from "./game/DeathOverlay";
 import { SockHud } from "./game/SockHud";
 import { AboutOverlay } from "./game/AboutOverlay";
 import { CameraHud } from "./game/CameraHud";
+import { WashHud } from "./game/WashHud";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3422,6 +3423,7 @@ export default function App() {
           {scene3D && introComplete && <SockHud />}
           {scene3D && introComplete && <AboutOverlay />}
           {scene3D && introComplete && <CameraHud />}
+          {scene3D && introComplete && <WashHud />}
         </div>
 
         {/* Dynamic Clothes Creator Menu */}

@@ -10,6 +10,7 @@ import { FootstepEffects } from "./FootstepEffects";
 import { ZombieChaser } from "./ZombieChaser";
 import { SockHunt } from "./SockHunt";
 import { CameraMode } from "./CameraMode";
+import { WashDay } from "./WashDay";
 
 export function GameLayer({ seasonKey }) {
   const { playing, won, dead, gameMode } = useGame();
@@ -28,6 +29,7 @@ export function GameLayer({ seasonKey }) {
       )}
       {gameMode === "socks" && <SockHunt />}
       {gameMode === "camera" && <CameraMode />}
+      {gameMode === "wash" && <WashDay />}
     </>
   );
 }
