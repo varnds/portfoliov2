@@ -52,7 +52,7 @@ function computeWaterY() {
   return terrainHeight(POND_X, POND_Z) + 0.95;
 }
 
-const WATER_Y = computeWaterY();
+export const WATER_Y = computeWaterY();
 
 // ─── season colour palette ────────────────────────────────────────────────────
 

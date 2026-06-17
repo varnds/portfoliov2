@@ -6,15 +6,20 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Discoverable } from "../Discoverable";
 import { terrainHeight, POND_X, POND_Z } from "../../scene3d/coords";
+import { WATER_Y } from "../../scene3d/Water";
 
 // Float the bottle ON the pond surface. The Discoverable grounds its group to
 // terrainHeight at (BX,BZ) (the carved basin floor, underwater); WATER_Y is the
-// rendered water plane (terrainHeight at pond centre + 0.45). FLOAT_BASE lifts
-// the bottle from that floor up to the waterline so it bobs on the surface.
+// rendered water plane imported from Water.jsx so it tracks the real fill level.
+// FLOAT_BASE lifts the bottle from that floor up to the waterline, plus a small
+// freeboard so the surface cuts across the lower third of the glass (most of the
+// bottle visible above water) rather than burying its centre.
 const BX = POND_X;
 const BZ = POND_Z + 2; // a touch toward the visible front of the pond
-const WATER_Y = terrainHeight(POND_X, POND_Z) + 0.45;
-const FLOAT_BASE = WATER_Y - terrainHeight(BX, BZ);
+// On-its-side body radius ≈ 0.16 * 0.7 scale ≈ 0.11. Lift the centre ~0.04 above
+// the surface so the waterline sits near the lower third of the bottle.
+const FREEBOARD = 0.04;
+const FLOAT_BASE = (WATER_Y + FREEBOARD) - terrainHeight(BX, BZ);
 
 export function MessageBottle() {
   const groupRef = useRef();

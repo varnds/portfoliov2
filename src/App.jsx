@@ -3206,8 +3206,9 @@ export default function App() {
             textAlign: "center",
             zIndex: 5,
             textShadow: titleLit ? "0 0 28px rgba(251,191,36,0.22)" : "none",
-            opacity: introComplete ? 1 : intro.heroOpacity,
+            opacity: enter3D ? 0 : (introComplete ? 1 : intro.heroOpacity),
             transform: `translateX(-50%) translateY(${introComplete ? 0 : (1 - intro.heroOpacity) * 14}px)`,
+            transition: "opacity 1.1s ease",
           }}>
             <div
               className={introComplete ? undefined : "intro-role-fade-up"}

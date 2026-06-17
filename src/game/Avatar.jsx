@@ -23,8 +23,8 @@ import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
-const WALK_SPEED = 3.4;
-const RUN_SPEED = 7.6;
+const WALK_SPEED = 4.0;
+const RUN_SPEED = 8.6;
 const WALK_REF = 3.0; // ground speed the walk clips are authored for
 const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
@@ -339,12 +339,33 @@ export function Avatar() {
     const shz = headZ.current / hl;
 
     // ── Camera ────────────────────────────────────────────────────────────────
-    // Yaw target: drag target by default; in behind/both, once you STOP moving,
-    // slowly swing to sit behind your last heading (chase-cam) — never during
-    // movement, so there's no feedback/curl.
+    // Yaw target: drag target by default. In "behind" (the default, no-mouse
+    // chase-cam) the camera CONTINUOUSLY follows behind the avatar's heading
+    // while moving, so a non-gamer always looks where they're walking without
+    // touching the mouse. "both" keeps the old gentle settle-on-idle feel.
+    //
+    // CRITICAL — no movement feedback loop: the movement basis above reads from
+    // yaw.current (the SMOOTHED orbit yaw), and the heading (shx/shz) it chases
+    // is derived from the player's INPUT direction, not from the camera. So the
+    // camera follows the heading, but the heading is set by the keys — the
+    // camera never feeds back into the movement basis to curve a held key.
+    // (ArrowUp resolves to a fixed world direction per frame; the basis only
+    // drifts as yaw eases behind it, which is the chase, not a curl.)
     let targetYaw = yawT.current;
     let yawLambda = 9;
-    if ((cameraMode === "behind" || cameraMode === "both") && !drag.current && idle.current > 0.18) {
+    if (cameraMode === "behind" && !drag.current && moved) {
+      // While walking: snappy-but-smooth chase that sits behind the heading.
+      // Frame-rate-independent exp damping (below) at a quick lambda keeps it
+      // responsive like "free" without jerk or jitter. Keep the manual drag
+      // target in sync so a grab hands over seamlessly.
+      targetYaw = Math.atan2(-shx, -shz);
+      yawT.current = targetYaw;
+      yawLambda = 6;
+    } else if (cameraMode === "behind" && !drag.current && idle.current > 0.18) {
+      // Settled idle: hold the last chase yaw (already synced into yawT above).
+      targetYaw = yawT.current;
+      yawLambda = 6;
+    } else if (cameraMode === "both" && !drag.current && idle.current > 0.18) {
       targetYaw = Math.atan2(-shx, -shz);
       yawT.current = targetYaw; // keep manual target in sync for seamless drag
       yawLambda = 2.2; // slow, gentle settle
