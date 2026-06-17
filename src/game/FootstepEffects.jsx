@@ -81,14 +81,14 @@ const SIDE = 0.14;      // L/R foot offset from the centre line
 // `soft` picks the round snow-flake texture for grains; others use a crisp grain.
 const FX = {
   summer: {
-    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 32, up: 0.22, out: 1.3, grav: -4.2,
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 48, up: 0.22, out: 1.3, grav: -4.2,
     life: 0.45, size: 0.012, drift: 0.3, soft: false,
     scuff: { color: "#E0C79C", r: 0.62, life: 0.55, alpha: 0.46 },
     print: "#8A6A3E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
   },
   winter: {
-    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 9, up: 0.4, out: 0.9, grav: -1.6,
-    life: 0.9, size: 0.075, drift: 0.32, soft: true,
+    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 6, up: 0.4, out: 0.9, grav: -1.6,
+    life: 0.9, size: 0.1, drift: 0.32, soft: true,
     scuff: { color: "#FFFFFF", r: 0.66, life: 0.7, alpha: 0.5 },
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
@@ -100,8 +100,8 @@ const FX = {
   },
   autumn: {
     // actual little leaves that flutter and tumble down
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 9, up: 0.7, out: 1.0, grav: -1.4,
-    life: 1.3, size: 0.1, drift: 0.5, soft: false, leaf: true, sway: 0.9,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 6, up: 0.7, out: 1.0, grav: -1.4,
+    life: 1.3, size: 0.15, drift: 0.5, soft: false, leaf: true, sway: 0.9,
     scuff: { color: "#CE9456", r: 0.52, life: 0.5, alpha: 0.3 },
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },

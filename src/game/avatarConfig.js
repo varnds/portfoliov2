@@ -8,7 +8,7 @@
  */
 export const AVATARS = [
   { id: "wolf", label: "Wolf", emoji: "🐺", url: "/models/avatars/wolf.glb", target: 1.7 },
-  { id: "zombie", label: "Zombie", emoji: "🧟", url: "/models/avatars/zombie.glb", target: 1.7 },
+  { id: "zombie", label: "Zombie", emoji: "🧟", url: "/models/avatars/zombie.glb", target: 2.1 },
   { id: "sharky", label: "Sharky", emoji: "🦈", url: "/models/avatars/sharky.glb", target: 1.7 },
   { id: "chicken_guy", label: "Chicken Guy", emoji: "🐤", url: "/models/avatars/chicken_guy.glb", target: 1.6 },
   { id: "cube_woman", label: "Cube Woman", emoji: "🧊", url: "/models/avatars/cube_woman.glb", target: 1.7 },
