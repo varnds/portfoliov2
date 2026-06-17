@@ -53,8 +53,8 @@ const SIDE = 0.14;      // L/R foot offset from the centre line
 // `soft` picks the round snow-flake texture for grains; others use a crisp grain.
 const FX = {
   summer: {
-    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 14, up: 0.22, out: 1.3, grav: -4.2,
-    life: 0.45, size: 0.022, drift: 0.3, soft: false,
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 16, up: 0.22, out: 1.3, grav: -4.2,
+    life: 0.45, size: 0.012, drift: 0.3, soft: false,
     scuff: { color: "#E0C79C", r: 0.62, life: 0.55, alpha: 0.46 },
     print: "#8A6A3E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
   },
