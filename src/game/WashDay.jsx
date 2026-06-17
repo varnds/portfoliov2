@@ -80,9 +80,11 @@ const NEAR_RANGE = 2.2;
 // Denim palette across the three states (the canvas art is tinted by lerping the
 // material color; the texture itself carries the seam/stitch detail in greys so
 // the tint reads cleanly across dirty→wet→clean).
-const DENIM_DIRTY = new THREE.Color("#41597C"); // dusty, dimmer blue
-const DENIM_WET = new THREE.Color("#243C57"); // dark, saturated when soaked
-const DENIM_CLEAN = new THREE.Color("#5C8AD0"); // bright fresh denim
+// Washed/faded denim — light + soft so it sits with the cream clothesline palette
+// instead of clashing as a dark navy.
+const DENIM_DIRTY = new THREE.Color("#8A98A8"); // muted dusty (mud sits on top)
+const DENIM_WET = new THREE.Color("#6E8AA6"); // darker when soaked
+const DENIM_CLEAN = new THREE.Color("#AFC6DD"); // pale washed denim, fresh + light
 
 // ── Reusable scratch (no per-frame allocations) ────────────────────────────────
 const _tmpColor = new THREE.Color();
@@ -572,31 +574,21 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
   );
 }
 
-// ── The dirty denim lying FLAT on the ground (seek phase): glow + gentle ripple ──
+// ── The dirty denim lying FLAT on the ground (seek phase). It rests ON the
+// terrain — no float, no spin, no glow. The orange bird is the cue, not a halo. ──
 function SeekPanel({ visible }) {
   const g = useRef();
-  useFrame((st) => {
-    if (!g.current) return;
-    g.current.visible = visible;
-    if (!visible) return;
-    const t = st.clock.elapsedTime;
-    // crumpled flat on the ground: lift just off the terrain, slow turn so the
-    // glow draws the eye.
-    g.current.position.y = SEEK_POS.y + 0.06 + Math.sin(t * 1.4) * 0.03;
-    g.current.rotation.y = t * 0.5;
+  useFrame(() => {
+    if (g.current) g.current.visible = visible;
   });
   return (
-    <group ref={g} position={[SEEK_POS.x, SEEK_POS.y + 0.06, SEEK_POS.z]}>
-      {/* laid flat: rotate the hanging panel to lie on the ground, pinned edge back */}
+    // sit flush on the terrain (tiny lift to avoid z-fighting with the ground)
+    <group ref={g} position={[SEEK_POS.x, SEEK_POS.y + 0.02, SEEK_POS.z]} rotation={[0, 0.7, 0]}>
+      {/* laid flat on the ground: rotate the hanging panel down so it lies on the
+          surface; centre it over the spot so it reads as a dropped, crumpled garment */}
       <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0.85]}>
         <DenimPanel state="dirty" hung={false} />
       </group>
-      {/* soft glow + light */}
-      <mesh position={[0, 0.18, 0]}>
-        <sphereGeometry args={[0.95, 14, 14]} />
-        <meshBasicMaterial color="#8fb8e8" transparent opacity={0.13} depthWrite={false} />
-      </mesh>
-      <pointLight color="#9fc4ec" intensity={0.7} distance={3.2} position={[0, 0.3, 0]} />
     </group>
   );
 }

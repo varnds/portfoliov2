@@ -86,9 +86,9 @@ function SpeechBubble({ text }) {
   if (!text) return null;
   return (
     <Html
-      position={[0, 0.5, 0]}
+      position={[0, 1.15, 0]}
       center
-      distanceFactor={9}
+      distanceFactor={6}
       occlude={false}
       zIndexRange={[100, 0]}
       style={{ pointerEvents: "none", userSelect: "none" }}
@@ -99,14 +99,18 @@ function SpeechBubble({ text }) {
         key={text}
         style={{
           position: "relative",
-          maxWidth: 230,
+          width: 210, // fixed width so text wraps into a readable card, not 1 word/line
+          whiteSpace: "normal",
+          wordBreak: "normal",
+          overflowWrap: "break-word",
+          boxSizing: "border-box",
           background: CREAM,
           border: `1.5px solid ${ACCENT}`,
           borderRadius: 14,
-          padding: "10px 13px",
+          padding: "10px 14px",
           fontFamily: "'IBM Plex Mono', monospace",
           fontSize: 13,
-          lineHeight: 1.4,
+          lineHeight: 1.45,
           color: INK,
           textAlign: "center",
           boxShadow: "0 8px 22px rgba(58,42,32,0.28)",
@@ -194,9 +198,9 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
 
     // Hover offset above the target so the bird circles ABOVE it (eye-catching).
     // While celebrating, fly a wider victory loop near the line.
-    const circleR = celebrate ? 1.4 : 0.7;
+    const circleR = celebrate ? 1.4 : 0.8;
     const circleSpd = celebrate ? 2.6 : 1.1;
-    const hoverY = celebrate ? 2.4 : 1.9;
+    const hoverY = celebrate ? 2.4 : 1.45;
     _goal.set(
       target.x + Math.cos(t * circleSpd) * circleR,
       target.y + hoverY + Math.sin(t * 1.6) * 0.18,
@@ -229,7 +233,10 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
 
   return (
     <group ref={root}>
-      <BirdBody flapRef={flap} wingLRef={wingL} wingRRef={wingR} />
+      {/* scale the little bird up so it reads clearly next to its speech bubble */}
+      <group scale={2.0}>
+        <BirdBody flapRef={flap} wingLRef={wingL} wingRRef={wingR} />
+      </group>
       {/* hide the bubble during the celebration loop (HUD banner takes over) */}
       {!celebrate && <SpeechBubble text={line} />}
     </group>
