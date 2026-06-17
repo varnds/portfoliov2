@@ -39,6 +39,34 @@ function makeGrainTexture() {
   return tex;
 }
 
+// Small leaf silhouette (almond shape + midrib) for autumn — tinted per particle
+// and tumbled as it falls.
+function makeLeafTexture() {
+  const s = 40;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const ctx = cv.getContext("2d");
+  ctx.translate(s / 2, s / 2);
+  const h = s * 0.42;
+  const w = s * 0.3;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(0, -h);
+  ctx.quadraticCurveTo(w, 0, 0, h);
+  ctx.quadraticCurveTo(-w, 0, 0, -h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.22)"; // midrib reads as a darker vein after tint
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.82);
+  ctx.lineTo(0, h * 0.82);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 const PUFF_POOL = 200;
 const PRINT_POOL = 16;
 const SCUFF_POOL = 28;
@@ -53,7 +81,7 @@ const SIDE = 0.14;      // L/R foot offset from the centre line
 // `soft` picks the round snow-flake texture for grains; others use a crisp grain.
 const FX = {
   summer: {
-    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 16, up: 0.22, out: 1.3, grav: -4.2,
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 22, up: 0.22, out: 1.3, grav: -4.2,
     life: 0.45, size: 0.012, drift: 0.3, soft: false,
     scuff: { color: "#E0C79C", r: 0.62, life: 0.55, alpha: 0.46 },
     print: "#8A6A3E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
@@ -71,8 +99,9 @@ const FX = {
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
   },
   autumn: {
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 12, up: 0.45, out: 1.2, grav: -2.6,
-    life: 0.7, size: 0.032, drift: 0.5, soft: false,
+    // actual little leaves that flutter and tumble down
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E", "#A8702E"], n: 9, up: 0.7, out: 1.0, grav: -1.4,
+    life: 1.3, size: 0.1, drift: 0.5, soft: false, leaf: true, sway: 0.9,
     scuff: { color: "#CE9456", r: 0.52, life: 0.5, alpha: 0.3 },
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },
@@ -90,6 +119,7 @@ export function FootstepEffects({ seasonKey }) {
     // flake for snow & night dust.
     const grainTex = makeGrainTexture();
     const flakeTex = makeRadialTexture(1, 0.6, 0);
+    const leafTex = makeLeafTexture();
     const printTex = makeRadialTexture(1, 0.7, 0);
     const scuffTex = makeRadialTexture(0.8, 0.32, 0); // soft hollow-ish dust ring
 
@@ -106,7 +136,7 @@ export function FootstepEffects({ seasonKey }) {
       const sp = new THREE.Sprite(mat);
       sp.visible = false;
       puffGroup.add(sp);
-      puffs.push({ sp, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1, base: 0.4 });
+      puffs.push({ sp, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1, base: 0.4, leaf: false, phase: 0, spin: 0, rot0: 0, sway: 0, groundY: 0 });
     }
 
     const printGroup = new THREE.Group();
@@ -147,7 +177,7 @@ export function FootstepEffects({ seasonKey }) {
     }
 
     return {
-      grainTex, flakeTex, printTex, scuffTex, printGeo,
+      grainTex, flakeTex, leafTex, printTex, scuffTex, printGeo,
       puffGroup, puffs, printGroup, prints, scuffGroup, scuffs,
     };
   }, []);
@@ -156,6 +186,7 @@ export function FootstepEffects({ seasonKey }) {
     () => () => {
       pool.grainTex.dispose();
       pool.flakeTex.dispose();
+      pool.leafTex.dispose();
       pool.printTex.dispose();
       pool.scuffTex.dispose();
       pool.printGeo.dispose();
@@ -192,9 +223,17 @@ export function FootstepEffects({ seasonKey }) {
       p.sp.position.x += p.vx * dt;
       p.sp.position.y += p.vy * dt;
       p.sp.position.z += p.vz * dt;
+      if (p.leaf) {
+        // flutter sideways + tumble (spin the sprite) as the leaf drifts down
+        const age = p.maxLife - p.life;
+        p.sp.position.x += Math.sin(age * 7 + p.phase) * p.sway * dt;
+        p.sp.position.z += Math.cos(age * 6 + p.phase * 1.3) * p.sway * dt;
+        p.sp.material.rotation = p.rot0 + p.spin * age;
+        if (p.sp.position.y < p.groundY + 0.04) p.sp.position.y = p.groundY + 0.04; // settle on the ground
+      }
       const k = p.life / p.maxLife; // 1 → 0
       p.sp.material.opacity = Math.min(1, k * 2.2) * 0.82; // crisp specks, not a solid pale mass
-      const s = p.base * (0.65 + 0.35 * k); // grains stay small, shrink slightly as they die
+      const s = p.base * (p.leaf ? 0.85 + 0.15 * k : 0.65 + 0.35 * k); // leaves hold size
       p.sp.scale.set(s, s, s);
     }
 
@@ -273,7 +312,7 @@ export function FootstepEffects({ seasonKey }) {
 
   function emitPuff(fx, x, z, groundY, dirX, dirZ, mult, lifeMult) {
     const count = Math.max(3, Math.round(fx.n * mult));
-    const tex = fx.soft ? pool.flakeTex : pool.grainTex;
+    const tex = fx.leaf ? pool.leafTex : fx.soft ? pool.flakeTex : pool.grainTex;
     for (let i = 0; i < count; i += 1) {
       const p = pool.puffs[puffCursor.current];
       puffCursor.current = (puffCursor.current + 1) % pool.puffs.length;
@@ -290,7 +329,18 @@ export function FootstepEffects({ seasonKey }) {
       p.vy = fx.up * (0.6 + Math.random() * 0.8) * mult;
       p.maxLife = fx.life * lifeMult * (0.8 + Math.random() * 0.5);
       p.life = p.maxLife;
-      p.base = fx.size * (0.6 + Math.random() * 0.9); // varied grain sizes
+      p.base = fx.size * (0.6 + Math.random() * 0.9); // varied grain/leaf sizes
+      p.groundY = groundY;
+      p.leaf = !!fx.leaf;
+      if (p.leaf) {
+        p.phase = Math.random() * Math.PI * 2;
+        p.spin = (Math.random() - 0.5) * 5; // tumble speed/direction
+        p.rot0 = Math.random() * Math.PI * 2;
+        p.sway = fx.sway || 0.6;
+        p.sp.material.rotation = p.rot0;
+      } else {
+        p.sp.material.rotation = 0;
+      }
       if (p.sp.material.map !== tex) {
         p.sp.material.map = tex;
         p.sp.material.needsUpdate = true;
