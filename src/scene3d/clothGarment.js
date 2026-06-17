@@ -45,6 +45,52 @@ const COLS = 20; // width subdivisions
  * A fresh geometry is returned every call so each hanging garment ripples on its
  * own buffer.
  */
+/**
+ * A flat rectangular panel (z = 0) sized to a garment illustration, finely
+ * subdivided so it can ripple. The art texture (drawn with transparency outside
+ * the garment shape) supplies the silhouette — so this reads as a 2D drawing
+ * standing in the 3D world. Top edge sits at y = 0 (the clothesline); the panel
+ * hangs down. vWeight is 0 at the pinned top → 1 at the free hem.
+ */
+export function buildFlatPanel(wWorld, hWorld, rows = 34, cols = 16) {
+  const positions = [];
+  const uvs = [];
+  const vWeights = [];
+  const indices = [];
+  for (let j = 0; j <= rows; j += 1) {
+    const v = j / rows;
+    const y = -v * hWorld;
+    for (let i = 0; i <= cols; i += 1) {
+      const u = i / cols;
+      positions.push((u - 0.5) * wWorld, y, 0);
+      uvs.push(u, 1 - v); // texture top (uv.y=1) → garment top
+      vWeights.push(v);
+    }
+  }
+  const cw = cols + 1;
+  for (let j = 0; j < rows; j += 1) {
+    for (let i = 0; i < cols; i += 1) {
+      const a = j * cw + i;
+      const b = a + 1;
+      const c = a + cw;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return {
+    geometry: geo,
+    base: new Float32Array(positions),
+    vWeight: new Float32Array(vWeights),
+    rows,
+    cols,
+  };
+}
+
 export function buildClothGarment(typeKey) {
   const prof = PROFILES[typeKey] || PROFILES.KURTA;
   const H = prof.h;
