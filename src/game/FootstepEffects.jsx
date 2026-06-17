@@ -39,41 +39,47 @@ function makeGrainTexture() {
   return tex;
 }
 
-const PUFF_POOL = 460;
+const PUFF_POOL = 200;
 const PRINT_POOL = 16;
+const SCUFF_POOL = 28;
 const STEP_DIST = 0.62; // world units between footfalls
 const SIDE = 0.14;      // L/R foot offset from the centre line
 
-// Per-season character. Footfalls throw a SPRAY of many small distinct grains/
-// flakes (not a soft poof): high `n`, small `size`, fast outward `out`, real
-// gravity so they arc and fall. `soft` picks the round snow-flake texture; the
-// rest use a crisp grain. `colors` is sampled per particle (leaves/petals vary).
+// Per-season character. A footfall does three things:
+//  • scuff  — a flat dust disc that blooms outward ON THE GROUND and fades (so the
+//             disturbance reads as the ground, not the feet),
+//  • grains — a FEW tiny specks that skim off the ground surface,
+//  • print  — a fading footprint.
+// `soft` picks the round snow-flake texture for grains; others use a crisp grain.
 const FX = {
   summer: {
-    // rich golden-brown sand (light tans washed out to cream under tone mapping);
-    // a LOW, fast-settling scuff rather than a tall plume. Many minuscule grains.
-    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 44, up: 0.45, out: 1.5, grav: -5.4,
-    life: 0.5, size: 0.034, drift: 0.35, soft: false,
-    print: "#8A6A3E", pAlpha: 0.34, pLife: 5, pSize: [0.22, 0.34],
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 14, up: 0.22, out: 1.3, grav: -4.2,
+    life: 0.45, size: 0.022, drift: 0.3, soft: false,
+    scuff: { color: "#E0C79C", r: 0.62, life: 0.55, alpha: 0.46 },
+    print: "#8A6A3E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
   },
   winter: {
-    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 46, up: 0.9, out: 1.0, grav: -1.8,
-    life: 1.1, size: 0.055, drift: 0.35, soft: true,
+    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 16, up: 0.4, out: 0.9, grav: -1.6,
+    life: 0.9, size: 0.04, drift: 0.32, soft: true,
+    scuff: { color: "#FFFFFF", r: 0.66, life: 0.7, alpha: 0.5 },
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
   spring: {
-    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 36, up: 1.1, out: 1.2, grav: -3.4,
-    life: 0.65, size: 0.034, drift: 0.45, soft: false,
+    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 12, up: 0.45, out: 1.0, grav: -3.0,
+    life: 0.5, size: 0.022, drift: 0.4, soft: false,
+    scuff: { color: "#B7CE9C", r: 0.48, life: 0.45, alpha: 0.26 },
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
   },
   autumn: {
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 36, up: 1.0, out: 1.4, grav: -2.8,
-    life: 0.85, size: 0.046, drift: 0.6, soft: false,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 12, up: 0.45, out: 1.2, grav: -2.6,
+    life: 0.7, size: 0.032, drift: 0.5, soft: false,
+    scuff: { color: "#CE9456", r: 0.52, life: 0.5, alpha: 0.3 },
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },
   night: {
-    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 30, up: 0.8, out: 1.0, grav: -2.2,
-    life: 1.0, size: 0.042, drift: 0.3, soft: true,
+    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 10, up: 0.4, out: 0.9, grav: -2.0,
+    life: 0.8, size: 0.03, drift: 0.28, soft: true,
+    scuff: { color: "#8A93AE", r: 0.46, life: 0.5, alpha: 0.22 },
     print: "#444C66", pAlpha: 0.22, pLife: 4, pSize: [0.18, 0.28],
   },
 };
@@ -85,6 +91,7 @@ export function FootstepEffects({ seasonKey }) {
     const grainTex = makeGrainTexture();
     const flakeTex = makeRadialTexture(1, 0.6, 0);
     const printTex = makeRadialTexture(1, 0.7, 0);
+    const scuffTex = makeRadialTexture(0.8, 0.32, 0); // soft hollow-ish dust ring
 
     const puffGroup = new THREE.Group();
     const puffs = [];
@@ -120,7 +127,29 @@ export function FootstepEffects({ seasonKey }) {
       prints.push({ m, life: 0, maxLife: 1, alpha0: 0.3 });
     }
 
-    return { grainTex, flakeTex, printTex, printGeo, puffGroup, puffs, printGroup, prints };
+    // Ground scuff: a flat dust disc that blooms outward on the ground surface so
+    // the disturbance reads as the GROUND reacting, not the avatar's feet.
+    const scuffGroup = new THREE.Group();
+    const scuffs = [];
+    for (let i = 0; i < SCUFF_POOL; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: scuffTex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const m = new THREE.Mesh(printGeo, mat);
+      m.rotation.x = -Math.PI / 2;
+      m.visible = false;
+      scuffGroup.add(m);
+      scuffs.push({ m, life: 0, maxLife: 1, alpha0: 0.3, r0: 0.1, r1: 0.5 });
+    }
+
+    return {
+      grainTex, flakeTex, printTex, scuffTex, printGeo,
+      puffGroup, puffs, printGroup, prints, scuffGroup, scuffs,
+    };
   }, []);
 
   useEffect(
@@ -128,9 +157,11 @@ export function FootstepEffects({ seasonKey }) {
       pool.grainTex.dispose();
       pool.flakeTex.dispose();
       pool.printTex.dispose();
+      pool.scuffTex.dispose();
       pool.printGeo.dispose();
       pool.puffs.forEach((p) => p.sp.material.dispose());
       pool.prints.forEach((p) => p.m.material.dispose());
+      pool.scuffs.forEach((p) => p.m.material.dispose());
     },
     [pool],
   );
@@ -140,12 +171,13 @@ export function FootstepEffects({ seasonKey }) {
   const side = useRef(1);
   const puffCursor = useRef(0);
   const printCursor = useRef(0);
+  const scuffCursor = useRef(0);
   const wasAir = useRef(false);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
     const fx = FX[seasonKey] || FX.summer;
-    const { puffs, prints } = pool;
+    const { puffs, prints, scuffs } = pool;
 
     // ── advance live puffs ───────────────────────────────────────────────────
     for (let i = 0; i < puffs.length; i += 1) {
@@ -180,6 +212,21 @@ export function FootstepEffects({ seasonKey }) {
       pr.m.material.opacity = pr.alpha0 * Math.min(1, k * 6) * (0.4 + 0.6 * k);
     }
 
+    // ── advance scuff discs: bloom outward + fade ────────────────────────────
+    for (let i = 0; i < scuffs.length; i += 1) {
+      const s = scuffs[i];
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      if (s.life <= 0) {
+        s.m.visible = false;
+        continue;
+      }
+      const k = s.life / s.maxLife; // 1 → 0
+      const rad = s.r0 + (s.r1 - s.r0) * (1 - k); // expand as it ages
+      s.m.scale.set(rad, rad, 1);
+      s.m.material.opacity = s.alpha0 * Math.min(1, k * 5) * k; // quick in, fade as it spreads
+    }
+
     if (!avatarActive) {
       prev.current = null;
       return;
@@ -200,7 +247,8 @@ export function FootstepEffects({ seasonKey }) {
     // jump / fall landing → one big burst
     const air = avatarPos.y > groundY + 0.2;
     if (wasAir.current && !air) {
-      emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.4, 1.5);
+      emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.2, 1.5);
+      emitScuff(fx, avatarPos.x, avatarPos.z, groundY, 1.8);
     }
     wasAir.current = air;
 
@@ -217,6 +265,7 @@ export function FootstepEffects({ seasonKey }) {
       const ox = -dirZ * SIDE * side.current;
       const oz = dirX * SIDE * side.current;
       const fast = THREE.MathUtils.clamp(speed / 6, 0, 1);
+      emitScuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, 1 + fast * 0.4);
       emitPuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ, 1 + fast * 0.6, 1);
       emitPrint(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ);
     }
@@ -232,7 +281,7 @@ export function FootstepEffects({ seasonKey }) {
       const r = Math.random() * fx.out;
       p.sp.position.set(
         x + Math.cos(a) * r * 0.4,
-        groundY + 0.06 + Math.random() * 0.08,
+        groundY + 0.02 + Math.random() * 0.04, // skim off the ground surface
         z + Math.sin(a) * r * 0.4,
       );
       // kicked up + outward, biased backward against travel
@@ -269,8 +318,25 @@ export function FootstepEffects({ seasonKey }) {
     pr.m.visible = true;
   }
 
+  function emitScuff(fx, x, z, groundY, mult) {
+    const sc = pool.scuffs[scuffCursor.current];
+    scuffCursor.current = (scuffCursor.current + 1) % pool.scuffs.length;
+    sc.m.position.set(x, groundY + 0.018, z);
+    sc.m.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI);
+    sc.r0 = fx.scuff.r * 0.28 * mult;
+    sc.r1 = fx.scuff.r * mult;
+    sc.alpha0 = fx.scuff.alpha;
+    sc.maxLife = fx.scuff.life;
+    sc.life = sc.maxLife;
+    sc.m.material.color.set(fx.scuff.color);
+    sc.m.scale.set(sc.r0, sc.r0, 1);
+    sc.m.material.opacity = 0;
+    sc.m.visible = true;
+  }
+
   return (
     <>
+      <primitive object={pool.scuffGroup} />
       <primitive object={pool.printGroup} />
       <primitive object={pool.puffGroup} />
     </>
