@@ -39,7 +39,7 @@ function makeGrainTexture() {
   return tex;
 }
 
-const PUFF_POOL = 220;
+const PUFF_POOL = 460;
 const PRINT_POOL = 16;
 const STEP_DIST = 0.62; // world units between footfalls
 const SIDE = 0.14;      // L/R foot offset from the centre line
@@ -51,29 +51,29 @@ const SIDE = 0.14;      // L/R foot offset from the centre line
 const FX = {
   summer: {
     // rich golden-brown sand (light tans washed out to cream under tone mapping);
-    // a LOW, fast-settling scuff rather than a tall plume.
-    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 16, up: 0.45, out: 1.5, grav: -5.4,
-    life: 0.5, size: 0.08, drift: 0.35, soft: false,
+    // a LOW, fast-settling scuff rather than a tall plume. Many minuscule grains.
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 44, up: 0.45, out: 1.5, grav: -5.4,
+    life: 0.5, size: 0.034, drift: 0.35, soft: false,
     print: "#8A6A3E", pAlpha: 0.34, pLife: 5, pSize: [0.22, 0.34],
   },
   winter: {
-    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 20, up: 0.9, out: 1.0, grav: -1.8,
-    life: 1.1, size: 0.13, drift: 0.35, soft: true,
+    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 46, up: 0.9, out: 1.0, grav: -1.8,
+    life: 1.1, size: 0.055, drift: 0.35, soft: true,
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
   spring: {
-    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 16, up: 1.1, out: 1.2, grav: -3.4,
-    life: 0.65, size: 0.09, drift: 0.45, soft: false,
+    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 36, up: 1.1, out: 1.2, grav: -3.4,
+    life: 0.65, size: 0.034, drift: 0.45, soft: false,
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
   },
   autumn: {
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 16, up: 1.0, out: 1.4, grav: -2.8,
-    life: 0.85, size: 0.13, drift: 0.6, soft: false,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 36, up: 1.0, out: 1.4, grav: -2.8,
+    life: 0.85, size: 0.046, drift: 0.6, soft: false,
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },
   night: {
-    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 14, up: 0.8, out: 1.0, grav: -2.2,
-    life: 1.0, size: 0.1, drift: 0.3, soft: true,
+    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 30, up: 0.8, out: 1.0, grav: -2.2,
+    life: 1.0, size: 0.042, drift: 0.3, soft: true,
     print: "#444C66", pAlpha: 0.22, pLife: 4, pSize: [0.18, 0.28],
   },
 };
