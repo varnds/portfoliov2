@@ -26,10 +26,11 @@ function makeGrainTexture() {
   const cv = document.createElement("canvas");
   cv.width = cv.height = s;
   const ctx = cv.getContext("2d");
+  // Hard core with only a 1px feather — a solid speck, not a glowing bubble.
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
   g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.55, "rgba(255,255,255,0.95)");
-  g.addColorStop(0.8, "rgba(255,255,255,0.35)");
+  g.addColorStop(0.72, "rgba(255,255,255,1)");
+  g.addColorStop(0.92, "rgba(255,255,255,0.6)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s, s);
@@ -49,9 +50,11 @@ const SIDE = 0.14;      // L/R foot offset from the centre line
 // rest use a crisp grain. `colors` is sampled per particle (leaves/petals vary).
 const FX = {
   summer: {
-    colors: ["#E4C295", "#D2A878", "#EAD3A8", "#C99B68"], n: 22, up: 1.0, out: 1.7, grav: -4.2,
-    life: 0.6, size: 0.09, drift: 0.3, soft: false,
-    print: "#9C7C4E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
+    // rich golden-brown sand (light tans washed out to cream under tone mapping);
+    // a LOW, fast-settling scuff rather than a tall plume.
+    colors: ["#B58438", "#9E6C28", "#C8A05A", "#8A5C22"], n: 16, up: 0.45, out: 1.5, grav: -5.4,
+    life: 0.5, size: 0.08, drift: 0.35, soft: false,
+    print: "#8A6A3E", pAlpha: 0.34, pLife: 5, pSize: [0.22, 0.34],
   },
   winter: {
     colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 20, up: 0.9, out: 1.0, grav: -1.8,
@@ -91,7 +94,7 @@ export function FootstepEffects({ seasonKey }) {
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        toneMapped: true,
+        toneMapped: false, // render the authored grain colour (tone mapping washed tans to cream)
       });
       const sp = new THREE.Sprite(mat);
       sp.visible = false;
@@ -158,7 +161,7 @@ export function FootstepEffects({ seasonKey }) {
       p.sp.position.y += p.vy * dt;
       p.sp.position.z += p.vz * dt;
       const k = p.life / p.maxLife; // 1 → 0
-      p.sp.material.opacity = Math.min(1, k * 2.2) * 0.95; // crisp, quick fade at the end
+      p.sp.material.opacity = Math.min(1, k * 2.2) * 0.82; // crisp specks, not a solid pale mass
       const s = p.base * (0.65 + 0.35 * k); // grains stay small, shrink slightly as they die
       p.sp.scale.set(s, s, s);
     }
