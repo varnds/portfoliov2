@@ -442,9 +442,14 @@ const SUDS_COUNT = 12;
 function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
   const shell = useRef();
   const drum = useRef();
+  const jacket = useRef();
   const suds = useRef();
   const glowMesh = useRef();
   const glowRef = useRef(0);
+  const fill = useRef();
+  // eased "agitation" 0..1 — ramps up while holding, settles when released, so the
+  // spin and shake feel like they spin up/down rather than snapping
+  const spin = useRef(0);
   const sudsState = useMemo(
     () =>
       Array.from({ length: SUDS_COUNT }, (_, i) => ({
@@ -459,18 +464,41 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
 
   useFrame((st, dt) => {
     const t = st.clock.elapsedTime;
-    // liveliness scales with washP and surges while the player holds F
-    const hold = holding ? 1 : 0.45;
-    const live = washing ? (0.25 + washP * 0.75) * hold : 0;
+    // ease the agitation level toward 1 while the player HOLDS S, back toward 0
+    // when released → the drum visibly spins UP and coasts DOWN instead of snapping
+    const target = washing && holding ? 1 : 0;
+    spin.current += (target - spin.current) * Math.min(1, dt * (target > spin.current ? 4 : 2.5));
+    const ag = spin.current; // 0..1 aggressive-spin factor
+    // liveliness scales with washP and surges hard while holding (driven by `ag`)
+    const live = washing ? (0.2 + washP * 0.5) * (0.4 + ag * 0.9) : 0;
 
-    if (drum.current)
-      drum.current.rotation.z -= dt * (washing ? (3 + washP * 9) * (0.6 + hold * 0.8) : 0);
+    if (drum.current) {
+      // base tumble while washing + a big aggressive boost while holding S.
+      // idle ≈ 2.5 rad/s, full-hold ≈ ~22 rad/s → reads as genuinely fast
+      const baseSpd = washing ? 2.5 + washP * 3 : 0;
+      const spd = baseSpd + ag * (14 + washP * 6);
+      drum.current.rotation.z -= dt * spd;
+    }
+    // jacket counter-tumbles a touch slower than the drum so the clothes mass reads
+    // as a loose load being thrown around rather than rigidly bolted to the fins
+    if (jacket.current && washing) {
+      jacket.current.rotation.z += dt * (1.2 + ag * 6 + washP * 2);
+    }
 
     if (shell.current) {
-      const s = live * 0.025;
-      shell.current.position.x = Math.sin(t * 28) * s;
-      shell.current.position.y = Math.abs(Math.sin(t * 22)) * s * 0.6;
-      shell.current.rotation.z = Math.sin(t * 25 + 1) * s * 0.5;
+      // whole-machine shake: gentle idle wobble, violent jitter while holding S
+      const s = live * 0.02 + ag * 0.03;
+      shell.current.position.x = Math.sin(t * 34) * s + Math.sin(t * 53) * s * 0.4;
+      shell.current.position.y = Math.abs(Math.sin(t * 26)) * s * 0.7;
+      shell.current.position.z = Math.cos(t * 41) * s * 0.5;
+      shell.current.rotation.z = Math.sin(t * 30 + 1) * s * 0.6;
+      shell.current.rotation.x = Math.sin(t * 23) * s * 0.3;
+    }
+
+    // soft interior fill brightens with the agitation so you can read the clothes
+    // tumbling through the glass; a faint flicker sells the sloshing water
+    if (fill.current) {
+      fill.current.intensity = 0.5 + (washing ? 0.5 : 0) + ag * 0.7 + Math.sin(t * 18) * 0.06 * ag;
     }
 
     if (suds.current) {
@@ -544,31 +572,84 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
           />
         </mesh>
 
-        {/* porthole */}
+        {/* porthole / door — you can SEE INSIDE the drum through clear glass */}
         <group position={[0, 0.6, 0.47]}>
+          {/* chrome bezel ring */}
           <mesh rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.34, 0.34, 0.06, 24]} />
             <meshStandardMaterial color="#C2C8D0" roughness={0.5} metalness={0} />
           </mesh>
-          <mesh position={[0, 0, 0.02]}>
-            <circleGeometry args={[0.27, 24]} />
-            <meshStandardMaterial color="#1b2733" roughness={0.3} metalness={0} transparent opacity={0.92} />
-          </mesh>
-          <group ref={drum} position={[0, 0, 0.005]}>
-            {[0, 1, 2, 3].map((i) => (
-              <mesh key={i} rotation={[0, 0, (i / 4) * Math.PI * 2]}>
-                <boxGeometry args={[0.42, 0.018, 0.01]} />
-                <meshStandardMaterial color="#3a4a5c" roughness={0.6} metalness={0} />
-              </mesh>
-            ))}
-            {/* a denim hint tumbling behind the glass while washing */}
-            {jacketInDrum && (
-              <mesh position={[0, 0, 0.006]}>
-                <circleGeometry args={[0.16, 16]} />
-                <meshStandardMaterial color="#2f4d72" roughness={0.9} metalness={0} />
-              </mesh>
-            )}
+
+          {/* recessed drum cavity behind the glass — sits back so the clothes have
+              depth to tumble in. A bright interior wall + a small fill light let the
+              tumbling load read clearly through the glass. */}
+          <group position={[0, 0, -0.12]}>
+            {/* soft interior fill light so the inside isn't a black void */}
+            <pointLight
+              ref={fill}
+              position={[0, 0, 0.08]}
+              distance={0.9}
+              decay={2}
+              intensity={0.5}
+              color="#EAF2FF"
+            />
+            {/* back wall of the drum (brightened so silhouettes pop) */}
+            <mesh position={[0, 0, -0.06]}>
+              <circleGeometry args={[0.3, 24]} />
+              <meshStandardMaterial color="#D9E4F0" roughness={0.85} metalness={0} emissive="#9fb4cc" emissiveIntensity={0.25} />
+            </mesh>
+
+            {/* the spinning drum: fins + the tumbling denim load */}
+            <group ref={drum}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <mesh key={i} rotation={[0, 0, (i / 6) * Math.PI * 2]} position={[0, 0, 0.01]}>
+                  <boxGeometry args={[0.5, 0.02, 0.02]} />
+                  <meshStandardMaterial color="#7d92a8" roughness={0.7} metalness={0} />
+                </mesh>
+              ))}
+
+              {/* the denim jacket as a clothes mass that tumbles WITH the drum,
+                  visible specifically while washing / jacketInDrum */}
+              {jacketInDrum && (
+                <group ref={jacket} position={[0, -0.02, 0.04]}>
+                  {/* main crumpled body */}
+                  <mesh rotation={[0, 0, 0.3]}>
+                    <boxGeometry args={[0.26, 0.2, 0.09]} />
+                    <meshStandardMaterial color="#6E90BC" roughness={0.95} metalness={0} />
+                  </mesh>
+                  {/* a folded sleeve flung out to one side */}
+                  <mesh position={[0.14, 0.05, 0.01]} rotation={[0, 0, -0.6]}>
+                    <boxGeometry args={[0.16, 0.08, 0.07]} />
+                    <meshStandardMaterial color="#A6C0DC" roughness={0.95} metalness={0} />
+                  </mesh>
+                  {/* a darker denim fold for depth */}
+                  <mesh position={[-0.08, -0.07, 0.02]} rotation={[0, 0, 0.9]}>
+                    <boxGeometry args={[0.13, 0.07, 0.06]} />
+                    <meshStandardMaterial color="#4E6E96" roughness={0.95} metalness={0} />
+                  </mesh>
+                </group>
+              )}
+            </group>
           </group>
+
+          {/* clear glass door — low opacity, slight cool tint, so the drum reads
+              through it. depthWrite off so the interior isn't occluded. */}
+          <mesh position={[0, 0, 0.02]}>
+            <circleGeometry args={[0.28, 24]} />
+            <meshStandardMaterial
+              color="#cfe2f2"
+              roughness={0.05}
+              metalness={0}
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            />
+          </mesh>
+          {/* a faint specular highlight smear on the glass to sell that it's glass */}
+          <mesh position={[-0.09, 0.09, 0.025]} rotation={[0, 0, -0.5]}>
+            <planeGeometry args={[0.16, 0.06]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.22} depthWrite={false} />
+          </mesh>
         </group>
 
         {/* feet */}
