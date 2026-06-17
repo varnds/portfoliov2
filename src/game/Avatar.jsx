@@ -17,7 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import { avatarPos, setLanded, refreshGuideTarget, useGame, chase } from "./gameStore";
+import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 
@@ -318,6 +318,9 @@ export function Avatar() {
         df = Math.atan2(Math.sin(df), Math.cos(df));
         ref.current.rotation.y += df * (1 - Math.exp(-12 * dt));
       }
+      // push out of solids (artifacts + the chaser) so nothing ghosts through;
+      // resolve on x/z first, then derive height from the resolved position.
+      resolveCollisions(avatarPos);
       let y = terrainHeight(avatarPos.x, avatarPos.z);
       if (jumping.current) {
         jumpT.current += d;

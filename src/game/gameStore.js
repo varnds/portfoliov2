@@ -28,6 +28,40 @@ export function tagPlayer(elapsed, dur = 1.2) {
   chase.slowedUntil = elapsed + dur;
 }
 
+// ── Collision (lightweight circular) ─────────────────────────────────────────
+// The chaser publishes its live position here; the Avatar reads it (and the
+// registered artifacts) each frame to resolve out of overlaps — so nothing walks
+// through anything. No physics engine: just circle push-out.
+export const zombiePos = new THREE.Vector3(0, 0, 0);
+export let zombieActive = false;
+export function setZombieActive(v) {
+  zombieActive = v;
+}
+const AVATAR_RADIUS = 0.5;
+const ARTIFACT_RADIUS = 0.7;
+const ZOMBIE_RADIUS = 0.7;
+export const ZOMBIE_STANDOFF = AVATAR_RADIUS + ZOMBIE_RADIUS; // chaser stops here
+
+/** Push `pos` (a THREE.Vector3, x/z mutated in place) out of any solid it
+ *  overlaps: the registered artifacts and the chaser zombie. One pass per frame. */
+export function resolveCollisions(pos, selfR = AVATAR_RADIUS) {
+  const pushOut = (cx, cz, min) => {
+    const dx = pos.x - cx;
+    const dz = pos.z - cz;
+    const dist = Math.hypot(dx, dz);
+    if (dist >= min) return;
+    if (dist > 1e-4) {
+      const push = (min - dist) / dist;
+      pos.x += dx * push;
+      pos.z += dz * push;
+    } else {
+      pos.x += min; // coincident → arbitrary nudge so they never lock together
+    }
+  };
+  registry.forEach((d) => pushOut(d.position.x, d.position.z, selfR + ARTIFACT_RADIUS));
+  if (zombieActive) pushOut(zombiePos.x, zombiePos.z, selfR + ZOMBIE_RADIUS);
+}
+
 // Current season accent (live binding) so in-world cues can glow on-theme.
 export let themeAccent = "#E2725B";
 export function setThemeAccent(hex) {

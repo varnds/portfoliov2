@@ -14,7 +14,10 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import { avatarPos, avatarActive, tagPlayer, useGame, totalCount } from "./gameStore";
+import {
+  avatarPos, avatarActive, tagPlayer, useGame, totalCount,
+  zombiePos, setZombieActive, ZOMBIE_STANDOFF,
+} from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 
 const ZOMBIE_URL = "/models/avatars/zombie.glb";
@@ -114,20 +117,22 @@ export function ZombieChaser() {
     if (groupRef.current) {
       const y = terrainHeight(SPAWN.x, SPAWN.z);
       groupRef.current.position.set(SPAWN.x, y, SPAWN.z);
+      zombiePos.copy(groupRef.current.position);
     }
     facing.current = 0;
     lastTag.current = -Infinity;
     pauseUntil.current = 0;
     lungeAmt.current = 0;
+    setZombieActive(true); // collidable while present
 
-    if (!actions) return;
-    const clipName = pickClip(names);
+    const clipName = actions && pickClip(names);
     const a = clipName && actions[clipName];
     if (a) {
       a.reset().fadeIn(0.3).play();
       a.setEffectiveTimeScale(0.9); // a touch sluggish — shambling, not sprinting
     }
     return () => {
+      setZombieActive(false);
       if (actions) Object.values(actions).forEach((x) => x && x.stop());
     };
   }, [actions, names]);
@@ -143,6 +148,7 @@ export function ZombieChaser() {
     // even tag it mid-air). `avatarActive` is a live binding; read it fresh.
     if (!avatarActive) {
       g.position.y = terrainHeight(g.position.x, g.position.z);
+      zombiePos.copy(g.position);
       return;
     }
 
@@ -156,13 +162,16 @@ export function ZombieChaser() {
     const paused = t < pauseUntil.current;
     if (dist > 0.0001 && !paused) {
       dir.multiplyScalar(1 / dist); // normalize
-      const step = Math.min(speed * d, dist); // don't overshoot the player
+      // stop at the stand-off radius so it presses AGAINST the player, never
+      // overlapping/penetrating (the avatar also pushes out of the zombie).
+      const step = Math.min(speed * d, Math.max(0, dist - ZOMBIE_STANDOFF));
       g.position.x += dir.x * step;
       g.position.z += dir.z * step;
     }
 
-    // Keep grounded on the terrain.
+    // Keep grounded on the terrain, and publish the live position for collision.
     g.position.y = terrainHeight(g.position.x, g.position.z);
+    zombiePos.copy(g.position);
 
     // Smoothly rotate to face travel/target direction (atan2 gives the yaw that
     // points +Z forward of the model toward the player).
