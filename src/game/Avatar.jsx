@@ -206,6 +206,7 @@ export function Avatar() {
   const headZ = useRef(1);
   const focus = useRef(null); // smoothed camera focus point
   const idle = useRef(0); // seconds since last movement
+  const deathT = useRef(0); // seconds into the death topple (0 = alive)
 
   const { playing, avatarVariant, cameraMode } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
@@ -217,6 +218,8 @@ export function Avatar() {
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
     idle.current = 0;
+    deathT.current = 0; // alive again on (re)start
+    if (ref.current) ref.current.rotation.set(0, ref.current.rotation.y, 0);
     setLanded(false);
     const MOVE_KEYS = new Set([
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space",
@@ -276,6 +279,39 @@ export function Avatar() {
     let moved = false;
     let running = false;
     let speed = 0;
+
+    // ── DEATH: caught 3 times. Stop all movement and play a one-shot topple —
+    // the avatar tips onto its side (rotation.z → ~90°) and sinks slightly, then
+    // stays down. Procedural (the GLBs ship no death clip). Reset on new game via
+    // deathT=0 in the spawn effect. Read the non-reactive mirror per-frame.
+    if (chase.dead) {
+      deathT.current = Math.min(0.8, deathT.current + d);
+      const k = THREE.MathUtils.clamp(deathT.current / 0.8, 0, 1);
+      const e = 1 - Math.pow(1 - k, 3); // easeOutCubic
+      ref.current.rotation.z = e * (Math.PI / 2); // topple onto its side
+      ref.current.rotation.x = 0;
+      // sink a touch into the ground as it falls
+      avatarPos.y = terrainHeight(avatarPos.x, avatarPos.z) - e * 0.22;
+      ref.current.position.copy(avatarPos);
+      motion.current.moving = false;
+      motion.current.running = false;
+      motion.current.jumping = false;
+      motion.current.speed = 0;
+      return; // freeze camera + everything else on death
+    }
+
+    // ── PAUSE-TO-READ: frozen while reading an artifact reveal. Hold the avatar
+    // in place (no input, no jump), but keep the camera framing alive below so
+    // the world doesn't lock up. Read the non-reactive mirror per-frame.
+    if (chase.paused) {
+      avatarPos.y = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
+      ref.current.position.copy(avatarPos);
+      motion.current.moving = false;
+      motion.current.running = false;
+      motion.current.jumping = false;
+      motion.current.speed = 0;
+      return;
+    }
 
     if (dropping.current) {
       avatarPos.y += (groundY - avatarPos.y) * Math.min(1, d * 3.2);

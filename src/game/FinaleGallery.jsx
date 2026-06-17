@@ -14,8 +14,8 @@ const INK = "#3A2A20";
 const SUBINK = "#5A463A";
 
 export function FinaleGallery() {
-  const { playing, won, truths } = useGame();
-  if (!playing || !won) return null;
+  const { gameMode, playing, won, truths } = useGame();
+  if (gameMode !== "chase" || !playing || !won) return null;
 
   const facts = Array.isArray(truths) ? truths : [];
   // Headline + intro land first; cards begin staggering in after that beat.

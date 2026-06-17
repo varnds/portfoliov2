@@ -65,6 +65,11 @@ import { AvatarSwitcher } from "./game/AvatarSwitcher";
 import { CameraSwitcher } from "./game/CameraSwitcher";
 import { ChaseHud } from "./game/ChaseHud";
 import { FinaleGallery } from "./game/FinaleGallery";
+import { ModeSelector } from "./game/ModeSelector";
+import { DeathOverlay } from "./game/DeathOverlay";
+import { SockHud } from "./game/SockHud";
+import { AboutOverlay } from "./game/AboutOverlay";
+import { CameraHud } from "./game/CameraHud";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3408,9 +3413,15 @@ export default function App() {
           {scene3D && introComplete && <CameraSwitcher visible={scene3D && introComplete} />}
           {scene3D && introComplete && <WelcomeCard />}
           {scene3D && introComplete && <ContextHint />}
+          {scene3D && introComplete && <ModeSelector visible={scene3D && introComplete} />}
           <RevealCard />
+          {/* each HUD self-gates on its gameMode + playing state */}
           {scene3D && introComplete && <ChaseHud />}
           {scene3D && introComplete && <FinaleGallery />}
+          {scene3D && introComplete && <DeathOverlay />}
+          {scene3D && introComplete && <SockHud />}
+          {scene3D && introComplete && <AboutOverlay />}
+          {scene3D && introComplete && <CameraHud />}
         </div>
 
         {/* Dynamic Clothes Creator Menu */}

@@ -22,7 +22,9 @@ export let avatarActive = false; // true once the avatar has landed
 // The chaser zombie writes `slowedUntil` (in clock.elapsedTime seconds) when it
 // tags the player; the Avatar reads it each frame to briefly slow movement.
 // Non-reactive so tagging never triggers React re-renders.
-export const chase = { slowedUntil: 0 };
+// `slowedUntil` is the soft-tag slow; `paused`/`dead` are non-reactive mirrors of
+// the reactive state, read per-frame by the Avatar + ZombieChaser to freeze.
+export const chase = { slowedUntil: 0, paused: false, dead: false };
 /** Called by the chaser on contact: soft-tag the player (slow, no game-over). */
 export function tagPlayer(elapsed, dur = 1.2) {
   chase.slowedUntil = elapsed + dur;
@@ -39,12 +41,14 @@ export function setZombieActive(v) {
 }
 const AVATAR_RADIUS = 0.5;
 const ARTIFACT_RADIUS = 0.7;
-const ZOMBIE_RADIUS = 0.7;
+export const ZOMBIE_RADIUS = 0.7;
 export const ZOMBIE_STANDOFF = AVATAR_RADIUS + ZOMBIE_RADIUS; // chaser stops here
 
 /** Push `pos` (a THREE.Vector3, x/z mutated in place) out of any solid it
- *  overlaps: the registered artifacts and the chaser zombie. One pass per frame. */
-export function resolveCollisions(pos, selfR = AVATAR_RADIUS) {
+ *  overlaps: the registered artifacts and (optionally) the chaser zombie. One
+ *  pass per frame. Pass includeZombie=false when the MOVER is the zombie itself
+ *  (so it collides with artifacts but not with its own circle). */
+export function resolveCollisions(pos, selfR = AVATAR_RADIUS, includeZombie = true) {
   const pushOut = (cx, cz, min) => {
     const dx = pos.x - cx;
     const dz = pos.z - cz;
@@ -59,7 +63,7 @@ export function resolveCollisions(pos, selfR = AVATAR_RADIUS) {
     }
   };
   registry.forEach((d) => pushOut(d.position.x, d.position.z, selfR + ARTIFACT_RADIUS));
-  if (zombieActive) pushOut(zombiePos.x, zombiePos.z, selfR + ZOMBIE_RADIUS);
+  if (includeZombie && zombieActive) pushOut(zombiePos.x, zombiePos.z, selfR + ZOMBIE_RADIUS);
 }
 
 // Current season accent (live binding) so in-world cues can glow on-theme.
@@ -75,7 +79,11 @@ const registry = new Map();
 let state = {
   playing: false,
   landed: false,
+  gameMode: "chase", // "chase" (zombie + artifacts) | "socks" | "camera"
   won: false, // true once every artifact is found — triggers the finale
+  hits: 0, // chase: zombie tags landed (3 → dead)
+  dead: false, // chase: caught 3 times
+  paused: false, // chase: frozen while reading an artifact reveal
   discovered: new Set(), // ids
   truths: [], // resolved truth lines (content wired later)
   activeReveal: null, // { id, title, body } | null
@@ -102,17 +110,47 @@ export function startGame() {
   if (state.playing) return;
   avatarActive = false;
   chase.slowedUntil = 0;
+  chase.paused = false;
+  chase.dead = false;
   state = {
     ...state,
     playing: true,
     landed: false,
     won: false,
+    hits: 0,
+    dead: false,
+    paused: false,
     discovered: new Set(),
     truths: [],
     activeReveal: null,
     welcomeSeen: false,
     nearTarget: null,
   };
+  emit();
+}
+
+/** Switch which game is active (only meaningful from the hero / not playing). */
+export function setGameMode(m) {
+  if (state.gameMode === m) return;
+  state = { ...state, gameMode: m };
+  emit();
+}
+
+/** Chase: the zombie landed a tag. Three tags → dead. */
+export function hitPlayer() {
+  if (state.dead || state.paused) return;
+  const hits = state.hits + 1;
+  const dead = hits >= 3;
+  chase.dead = dead;
+  state = { ...state, hits, dead };
+  emit();
+}
+
+/** Chase: freeze the world while the player reads an artifact reveal. */
+export function setPaused(v) {
+  chase.paused = !!v;
+  if (state.paused === !!v) return;
+  state = { ...state, paused: !!v };
   emit();
 }
 
@@ -151,7 +189,13 @@ export function leaveNear(id) {
 export function endGame() {
   avatarActive = false;
   chase.slowedUntil = 0;
-  state = { ...state, playing: false, landed: false, won: false, activeReveal: null };
+  chase.paused = false;
+  chase.dead = false;
+  state = {
+    ...state,
+    playing: false, landed: false, won: false,
+    hits: 0, dead: false, paused: false, activeReveal: null,
+  };
   emit();
 }
 

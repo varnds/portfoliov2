@@ -15,8 +15,9 @@ import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
 import {
-  avatarPos, avatarActive, tagPlayer, useGame, totalCount,
+  avatarPos, avatarActive, tagPlayer, hitPlayer, useGame, totalCount,
   zombiePos, setZombieActive, ZOMBIE_STANDOFF,
+  resolveCollisions, ZOMBIE_RADIUS, chase,
 } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 
@@ -152,6 +153,15 @@ export function ZombieChaser() {
       return;
     }
 
+    // Frozen while the player reads an artifact reveal (pause-to-read) or is
+    // dead — hold position, skip movement + tagging entirely. Read the
+    // non-reactive mirrors so this never triggers a re-render.
+    if (chase.paused || chase.dead) {
+      g.position.y = terrainHeight(g.position.x, g.position.z);
+      zombiePos.copy(g.position);
+      return;
+    }
+
     // Rising tension: nudge speed up slightly as the player nears completion.
     const speed = THREE.MathUtils.lerp(BASE_SPEED, MAX_SPEED, progressRef.current);
 
@@ -168,6 +178,10 @@ export function ZombieChaser() {
       g.position.x += dir.x * step;
       g.position.z += dir.z * step;
     }
+
+    // Don't walk through artifacts: push out of any solid (includeZombie=false
+    // so it never tries to push out of its own circle), then re-ground.
+    resolveCollisions(g.position, ZOMBIE_RADIUS, false);
 
     // Keep grounded on the terrain, and publish the live position for collision.
     g.position.y = terrainHeight(g.position.x, g.position.z);
@@ -188,7 +202,8 @@ export function ZombieChaser() {
       lastTag.current = t;
       pauseUntil.current = t + LUNGE_PAUSE; // brief beat so it doesn't perma-stick
       lungeAmt.current = 1; // pop the lunge-cackle pose
-      tagPlayer(t); // soft-slow the player (no game-over, no damage)
+      tagPlayer(t); // soft-slow the player
+      hitPlayer(); // land a hit — three hits → dead (no-op if paused/dead)
     }
 
     // ── Comedic character: lurch, bob, and a lunge pose on tags ─────────────────
