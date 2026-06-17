@@ -45,7 +45,7 @@ export function PhotoFrame() {
   return (
     <Discoverable
       id="photo"
-      position={[-2, 0, 10]}
+      position={[-14, 0, 6]}
       radius={5}
       reveal={{
         title: "A picture I keep",

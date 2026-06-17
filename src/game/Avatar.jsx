@@ -17,7 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions } from "./gameStore";
+import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 import LandingPoof from "./LandingPoof";
@@ -274,6 +274,7 @@ export function Avatar() {
   const yaw = useRef(0);
   const pitch = useRef(0.38);
   const dist = useRef(8.5);
+  const occlR = useRef(8.5); // smoothed camera radius after occlusion pull-in
   const yawVel = useRef(0); // carried angular velocity for the follow spring
   const inDirX = useRef(0); // last raw input direction (camera target source)
   const inDirZ = useRef(1);
@@ -571,7 +572,17 @@ export function Avatar() {
     f.y = THREE.MathUtils.damp(f.y, camBaseY, 8, dt);
 
     const cp = pitch.current;
-    const r = dist.current;
+    // Occlusion pull-in: if a big obstacle (tent / washer) would sit between the
+    // camera and the avatar, tuck the camera in so the player stays visible. Work
+    // in the horizontal plane (cos(cp)*r), then smooth so it eases rather than pops.
+    const horiz = Math.cos(cp) * dist.current;
+    const camX = f.x + Math.sin(yaw.current) * horiz;
+    const camZ = f.z + Math.cos(yaw.current) * horiz;
+    const maxHoriz = occlusionMaxDist(f.x, f.z, camX, camZ);
+    const wantR = maxHoriz < horiz ? maxHoriz / Math.max(0.2, Math.cos(cp)) : dist.current;
+    // pull in fast (so the obstacle never covers you), ease back out gently
+    occlR.current = THREE.MathUtils.damp(occlR.current, wantR, wantR < occlR.current ? 16 : 5, dt);
+    const r = Math.min(dist.current, occlR.current);
     camera.position.set(
       f.x + Math.sin(yaw.current) * Math.cos(cp) * r,
       f.y + Math.sin(cp) * r + 1.0,

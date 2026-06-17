@@ -78,6 +78,37 @@ export function resolveCollisions(pos, selfR = AVATAR_RADIUS, includeZombie = tr
   if (includeZombie && zombieActive) pushOut(zombiePos.x, zombiePos.z, selfR + ZOMBIE_RADIUS);
 }
 
+/**
+ * Camera occlusion: the largest XZ distance the camera can sit from (ax,az) along
+ * the ray toward (cx,cz) WITHOUT a big solid obstacle ending up between the camera
+ * and the avatar (which would hide the player). Only large obstacles (r ≥ 1, e.g.
+ * the tent / washing machine) count — thin posts and small rocks are ignored so
+ * the camera doesn't twitch. Returns `full` when nothing blocks. Floored so the
+ * camera never collapses into the avatar.
+ */
+export function occlusionMaxDist(ax, az, cx, cz) {
+  let dx = cx - ax;
+  let dz = cz - az;
+  const full = Math.hypot(dx, dz);
+  if (full < 1e-3) return full;
+  dx /= full;
+  dz /= full;
+  let maxd = full;
+  obstacles.forEach((o) => {
+    if (o.r < 1.0) return; // only big things occlude
+    const ox = o.x - ax;
+    const oz = o.z - az;
+    const t = ox * dx + oz * dz; // projection onto the ray
+    if (t <= 0.5 || t >= full) return; // behind the avatar or past the camera
+    const perp = Math.abs(ox * dz - oz * dx); // perpendicular distance to the ray
+    if (perp < o.r + 0.6) {
+      const allowed = t - (o.r + 0.6); // tuck the camera just in front of it
+      if (allowed < maxd) maxd = allowed;
+    }
+  });
+  return Math.max(2.6, maxd);
+}
+
 // Current season accent (live binding) so in-world cues can glow on-theme.
 export let themeAccent = "#E2725B";
 export function setThemeAccent(hex) {
