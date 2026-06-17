@@ -162,13 +162,22 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     flourish.current = Math.max(0, flourish.current - dt);
     const fl = flourish.current > 0 ? flourish.current / 1.2 : 0; // 1→0 over the flourish
 
-    // Hover point: lead the player by LEAD_AHEAD toward the target, but never past
-    // it — once you arrive, the bird settles right over the spot to mark it.
+    // Hover point: lead the player by LEAD_AHEAD toward the target while walking;
+    // once you ARRIVE, park OFF TO THE SIDE of the spot (and a bit lower) instead
+    // of hovering on top of it — so it never blocks your view of the item.
+    const ux = dx / dist;
+    const uz = dz / dist;
     const lead = celebrate ? 0 : Math.min(LEAD_AHEAD, dist);
-    const baseX = dist > 0.4 ? a.x + (dx / dist) * lead : target.x;
-    const baseZ = dist > 0.4 ? a.z + (dz / dist) * lead : target.z;
-    const hoverY = celebrate ? 2.4 : 1.95;
-    const circleR = celebrate ? 1.4 : 0.32; // tight bob while leading; wide victory loop
+    let baseX = dist > 0.4 ? a.x + ux * lead : target.x;
+    let baseZ = dist > 0.4 ? a.z + uz * lead : target.z;
+    // "parked" ramps 0→1 as you close in (far = leading ahead, near = parked beside).
+    const parked = celebrate ? 0 : THREE.MathUtils.clamp(1 - (dist - 1.0) / 3.0, 0, 1);
+    const SIDE = 1.5;
+    baseX += -uz * SIDE * parked; // step to one side of the target
+    baseZ += ux * SIDE * parked;
+    // lower when parked so it sits beside the item, not high above it
+    const hoverY = celebrate ? 2.4 : 1.6 - parked * 0.5;
+    const circleR = celebrate ? 1.4 : 0.3; // tight bob while leading; wide victory loop
     const circleSpd = celebrate ? 2.6 : 1.3;
     // Hover a fixed height above the GROUND at its location (not the avatar's Y —
     // which is high mid sky-drop and would fling the bird into the sky).
@@ -215,7 +224,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
 
   return (
     <group ref={root}>
-      <group scale={0.55}>
+      <group scale={0.42}>
         <OrangeBirdShape wingL={wingL} wingR={wingR} />
       </group>
       {/* hide the bubble during the celebration loop (HUD banner takes over) */}
