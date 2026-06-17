@@ -7,8 +7,10 @@ import React from "react";
 import { useGame, closeReveal } from "./gameStore";
 
 export function RevealCard() {
-  const { activeReveal } = useGame();
-  if (!activeReveal) return null;
+  const { activeReveal, playing } = useGame();
+  // During the chase, ChaseHud presents grabs as a transient, non-blocking
+  // flash — so this card must NOT also pop. It only renders outside play.
+  if (playing || !activeReveal) return null;
   const { title, body } = activeReveal;
   return (
     <div

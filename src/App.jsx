@@ -63,6 +63,8 @@ import { RevealCard } from "./game/RevealCard";
 import { WelcomeCard, ContextHint } from "./game/PlayHints";
 import { AvatarSwitcher } from "./game/AvatarSwitcher";
 import { CameraSwitcher } from "./game/CameraSwitcher";
+import { ChaseHud } from "./game/ChaseHud";
+import { FinaleGallery } from "./game/FinaleGallery";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3407,6 +3409,8 @@ export default function App() {
           {scene3D && introComplete && <WelcomeCard />}
           {scene3D && introComplete && <ContextHint />}
           <RevealCard />
+          {scene3D && introComplete && <ChaseHud />}
+          {scene3D && introComplete && <FinaleGallery />}
         </div>
 
         {/* Dynamic Clothes Creator Menu */}

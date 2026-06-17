@@ -18,6 +18,16 @@ import { DEFAULT_AVATAR } from "./avatarConfig";
 export const avatarPos = new THREE.Vector3(0, 0, 0);
 export let avatarActive = false; // true once the avatar has landed
 
+// ── Chase state (non-reactive; read per-frame) ───────────────────────────────
+// The chaser zombie writes `slowedUntil` (in clock.elapsedTime seconds) when it
+// tags the player; the Avatar reads it each frame to briefly slow movement.
+// Non-reactive so tagging never triggers React re-renders.
+export const chase = { slowedUntil: 0 };
+/** Called by the chaser on contact: soft-tag the player (slow, no game-over). */
+export function tagPlayer(elapsed, dur = 1.2) {
+  chase.slowedUntil = elapsed + dur;
+}
+
 // Current season accent (live binding) so in-world cues can glow on-theme.
 export let themeAccent = "#E2725B";
 export function setThemeAccent(hex) {
@@ -31,6 +41,7 @@ const registry = new Map();
 let state = {
   playing: false,
   landed: false,
+  won: false, // true once every artifact is found — triggers the finale
   discovered: new Set(), // ids
   truths: [], // resolved truth lines (content wired later)
   activeReveal: null, // { id, title, body } | null
@@ -56,10 +67,12 @@ const getState = () => state;
 export function startGame() {
   if (state.playing) return;
   avatarActive = false;
+  chase.slowedUntil = 0;
   state = {
     ...state,
     playing: true,
     landed: false,
+    won: false,
     discovered: new Set(),
     truths: [],
     activeReveal: null,
@@ -103,7 +116,8 @@ export function leaveNear(id) {
 
 export function endGame() {
   avatarActive = false;
-  state = { ...state, playing: false, landed: false, activeReveal: null };
+  chase.slowedUntil = 0;
+  state = { ...state, playing: false, landed: false, won: false, activeReveal: null };
   emit();
 }
 
@@ -125,7 +139,11 @@ export function discover(id, reveal) {
   if (state.discovered.has(id)) return;
   const discovered = new Set(state.discovered);
   discovered.add(id);
-  state = { ...state, discovered, activeReveal: reveal || null };
+  // accumulate the found fact so the finale can show the whole collection
+  const truths = reveal ? [...state.truths, { id, ...reveal }] : state.truths;
+  // win when every registered artifact has been found
+  const won = registry.size > 0 && discovered.size >= registry.size;
+  state = { ...state, discovered, won, truths, activeReveal: reveal || null };
   emit();
 }
 

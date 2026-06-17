@@ -5,15 +5,18 @@ import { useGame } from "./gameStore";
 import { Avatar } from "./Avatar";
 import { Discoverables } from "./Discoverables";
 import { FootstepEffects } from "./FootstepEffects";
+import { ZombieChaser } from "./ZombieChaser";
 
 export function GameLayer({ seasonKey }) {
-  const { playing } = useGame();
+  const { playing, won } = useGame();
   if (!playing) return null;
   return (
     <>
       <Avatar />
       <Discoverables />
       <FootstepEffects seasonKey={seasonKey} />
+      {/* the chaser retires once you've found everything */}
+      {!won && <ZombieChaser />}
     </>
   );
 }

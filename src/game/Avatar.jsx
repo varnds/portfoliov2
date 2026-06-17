@@ -17,7 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import { avatarPos, setLanded, refreshGuideTarget, useGame } from "./gameStore";
+import { avatarPos, setLanded, refreshGuideTarget, useGame, chase } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 
@@ -268,9 +268,10 @@ export function Avatar() {
     };
   }, [playing, gl]);
 
-  useFrame((_, dt) => {
+  useFrame((frameState, dt) => {
     if (!playing || !ref.current) return;
     const d = Math.min(dt, 0.05);
+    const slowed = chase.slowedUntil > frameState.clock.elapsedTime; // soft-tag by the chaser
     const groundY = terrainHeight(avatarPos.x, avatarPos.z);
     let moved = false;
     let running = false;
@@ -287,6 +288,7 @@ export function Avatar() {
       const k = keys.current;
       running = !!(k.ShiftLeft || k.ShiftRight);
       speed = running ? RUN_SPEED : WALK_SPEED;
+      if (slowed) speed *= 0.45; // briefly hobbled after a zombie tag
       // Movement basis from the SMOOTHED orbit yaw (single source of truth) — NOT
       // camera.getWorldDirection. This is one-way (yaw → basis), so movement never
       // rotates the camera: a held key holds a fixed world direction (no curve).
