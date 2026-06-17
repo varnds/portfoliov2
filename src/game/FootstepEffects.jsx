@@ -19,50 +19,75 @@ import { avatarPos, avatarActive } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { makeRadialTexture } from "../scene3d/particleUtils";
 
-const PUFF_POOL = 72;
+// Crisp little grain: a small dot with a hard-ish core and a thin feather, so a
+// footfall throws distinct specks rather than a soft cloud.
+function makeGrainTexture() {
+  const s = 32;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const ctx = cv.getContext("2d");
+  const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.55, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.8, "rgba(255,255,255,0.35)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const PUFF_POOL = 220;
 const PRINT_POOL = 16;
 const STEP_DIST = 0.62; // world units between footfalls
 const SIDE = 0.14;      // L/R foot offset from the centre line
 
-// Per-season character. `colors` is sampled per particle so leaves/petals vary.
+// Per-season character. Footfalls throw a SPRAY of many small distinct grains/
+// flakes (not a soft poof): high `n`, small `size`, fast outward `out`, real
+// gravity so they arc and fall. `soft` picks the round snow-flake texture; the
+// rest use a crisp grain. `colors` is sampled per particle (leaves/petals vary).
 const FX = {
   summer: {
-    colors: ["#E9CBA2", "#DCB588", "#EFD8B0"], n: 7, up: 0.7, out: 0.8, grav: -1.5,
-    life: 0.75, size: 0.42, grow: 1.0, drift: 0.2,
+    colors: ["#E4C295", "#D2A878", "#EAD3A8", "#C99B68"], n: 22, up: 1.0, out: 1.7, grav: -4.2,
+    life: 0.6, size: 0.09, drift: 0.3, soft: false,
     print: "#9C7C4E", pAlpha: 0.32, pLife: 5, pSize: [0.22, 0.34],
   },
   winter: {
-    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 9, up: 0.6, out: 0.6, grav: -1.1,
-    life: 0.95, size: 0.4, grow: 1.15, drift: 0.18,
+    colors: ["#FFFFFF", "#EAF3FF", "#DCEAF8"], n: 20, up: 0.9, out: 1.0, grav: -1.8,
+    life: 1.1, size: 0.13, drift: 0.35, soft: true,
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
   spring: {
-    colors: ["#A6C487", "#8FB46E", "#F4B6C2", "#9FBF7F"], n: 5, up: 0.85, out: 0.55, grav: -1.7,
-    life: 0.6, size: 0.32, grow: 0.85, drift: 0.32,
+    colors: ["#9FBF7F", "#7FA85E", "#F4B6C2", "#8FB46E"], n: 16, up: 1.1, out: 1.2, grav: -3.4,
+    life: 0.65, size: 0.09, drift: 0.45, soft: false,
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
   },
   autumn: {
-    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 6, up: 0.9, out: 0.75, grav: -1.2,
-    life: 0.85, size: 0.4, grow: 1.2, drift: 0.5,
+    colors: ["#C8803F", "#B5532A", "#D9A441", "#9C5A2E"], n: 16, up: 1.0, out: 1.4, grav: -2.8,
+    life: 0.85, size: 0.13, drift: 0.6, soft: false,
     print: "#8E5E34", pAlpha: 0.3, pLife: 4.5, pSize: [0.2, 0.32],
   },
   night: {
-    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 4, up: 0.55, out: 0.5, grav: -1.0,
-    life: 0.95, size: 0.34, grow: 1.0, drift: 0.22,
+    colors: ["#9AA6C4", "#7E8AAA", "#AEB8D2"], n: 14, up: 0.8, out: 1.0, grav: -2.2,
+    life: 1.0, size: 0.1, drift: 0.3, soft: true,
     print: "#444C66", pAlpha: 0.22, pLife: 4, pSize: [0.18, 0.28],
   },
 };
 
 export function FootstepEffects({ seasonKey }) {
   const pool = useMemo(() => {
-    const puffTex = makeRadialTexture(1, 0.55, 0);
+    // crisp grain (tight core, little feather) for sand/dirt/leaves; soft round
+    // flake for snow & night dust.
+    const grainTex = makeGrainTexture();
+    const flakeTex = makeRadialTexture(1, 0.6, 0);
     const printTex = makeRadialTexture(1, 0.7, 0);
 
     const puffGroup = new THREE.Group();
     const puffs = [];
     for (let i = 0; i < PUFF_POOL; i += 1) {
       const mat = new THREE.SpriteMaterial({
-        map: puffTex,
+        map: grainTex,
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -92,12 +117,13 @@ export function FootstepEffects({ seasonKey }) {
       prints.push({ m, life: 0, maxLife: 1, alpha0: 0.3 });
     }
 
-    return { puffTex, printTex, printGeo, puffGroup, puffs, printGroup, prints };
+    return { grainTex, flakeTex, printTex, printGeo, puffGroup, puffs, printGroup, prints };
   }, []);
 
   useEffect(
     () => () => {
-      pool.puffTex.dispose();
+      pool.grainTex.dispose();
+      pool.flakeTex.dispose();
       pool.printTex.dispose();
       pool.printGeo.dispose();
       pool.puffs.forEach((p) => p.sp.material.dispose());
@@ -132,8 +158,8 @@ export function FootstepEffects({ seasonKey }) {
       p.sp.position.y += p.vy * dt;
       p.sp.position.z += p.vz * dt;
       const k = p.life / p.maxLife; // 1 → 0
-      p.sp.material.opacity = Math.min(1, k * 1.6) * 0.85;
-      const s = p.base * (1 + (1 - k) * fx.grow);
+      p.sp.material.opacity = Math.min(1, k * 2.2) * 0.95; // crisp, quick fade at the end
+      const s = p.base * (0.65 + 0.35 * k); // grains stay small, shrink slightly as they die
       p.sp.scale.set(s, s, s);
     }
 
@@ -194,7 +220,8 @@ export function FootstepEffects({ seasonKey }) {
   });
 
   function emitPuff(fx, x, z, groundY, dirX, dirZ, mult, lifeMult) {
-    const count = Math.max(2, Math.round(fx.n * mult));
+    const count = Math.max(3, Math.round(fx.n * mult));
+    const tex = fx.soft ? pool.flakeTex : pool.grainTex;
     for (let i = 0; i < count; i += 1) {
       const p = pool.puffs[puffCursor.current];
       puffCursor.current = (puffCursor.current + 1) % pool.puffs.length;
@@ -211,7 +238,11 @@ export function FootstepEffects({ seasonKey }) {
       p.vy = fx.up * (0.6 + Math.random() * 0.8) * mult;
       p.maxLife = fx.life * lifeMult * (0.8 + Math.random() * 0.5);
       p.life = p.maxLife;
-      p.base = fx.size * (0.7 + Math.random() * 0.7);
+      p.base = fx.size * (0.6 + Math.random() * 0.9); // varied grain sizes
+      if (p.sp.material.map !== tex) {
+        p.sp.material.map = tex;
+        p.sp.material.needsUpdate = true;
+      }
       p.sp.material.color.set(fx.colors[(Math.random() * fx.colors.length) | 0]);
       p.sp.material.opacity = 0;
       p.sp.scale.setScalar(p.base);
