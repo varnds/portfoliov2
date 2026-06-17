@@ -73,6 +73,10 @@ const WASHER_POS = new THREE.Vector3(
   terrainHeight(WASHER_XZ[0], WASHER_XZ[1]),
   WASHER_XZ[1]
 );
+// Face the washer's front (+Z local: door, drum, knobs) toward the way you walk
+// up to it — i.e. back toward the denim you're carrying from — so you always
+// approach its front, never its side/back.
+const WASHER_FACING = Math.atan2(SEEK_POS.x - WASHER_POS.x, SEEK_POS.z - WASHER_POS.z);
 
 const PEG_POS = new THREE.Vector3(PEG_POINT[0], PEG_POINT[1], PEG_POINT[2]);
 
@@ -492,7 +496,7 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
   });
 
   return (
-    <group position={[WASHER_POS.x, WASHER_POS.y, WASHER_POS.z]}>
+    <group position={[WASHER_POS.x, WASHER_POS.y, WASHER_POS.z]} rotation={[0, WASHER_FACING, 0]}>
       {/* approach glow halo */}
       <mesh ref={glowMesh} position={[0, 0.6, 0]} visible={false}>
         <sphereGeometry args={[1.3, 16, 16]} />

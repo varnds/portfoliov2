@@ -382,12 +382,13 @@ export function Avatar() {
         avatarPos.x += ix * speed * d;
         avatarPos.z += iz * speed * d;
         // smooth the heading, then ease the avatar's facing toward it
-        headX.current = THREE.MathUtils.damp(headX.current, ix, 8, dt);
-        headZ.current = THREE.MathUtils.damp(headZ.current, iz, 8, dt);
+        headX.current = THREE.MathUtils.damp(headX.current, ix, 6, dt);
+        headZ.current = THREE.MathUtils.damp(headZ.current, iz, 6, dt);
         const tf = Math.atan2(headX.current, headZ.current);
         let df = tf - ref.current.rotation.y;
         df = Math.atan2(Math.sin(df), Math.cos(df));
-        ref.current.rotation.y += df * (1 - Math.exp(-12 * dt));
+        // gentler body turn (was 12) so direction changes ease around, not snap
+        ref.current.rotation.y += df * (1 - Math.exp(-7 * dt));
       }
       // push out of solids (artifacts + the chaser) so nothing ghosts through;
       // resolve on x/z first, then derive height from the resolved position.
@@ -443,11 +444,11 @@ export function Avatar() {
       // already sits by more than ~22°. Small strafes stay put → no whip.
       let off = headingYaw - yaw.current;
       off = Math.atan2(Math.sin(off), Math.cos(off));
-      const DEADZONE = 0.38; // ~22°
+      const DEADZONE = 0.55; // ~31° — ignore more wiggle before re-centering
       if (Math.abs(off) > DEADZONE) {
         targetYaw = headingYaw;
         yawT.current = headingYaw; // keep manual-drag target in sync
-        smoothTime = 0.42; // gentle, continuous trail behind the heading
+        smoothTime = 0.6; // very gentle, continuous trail behind the heading
       } else {
         targetYaw = yaw.current; // within deadzone — hold the current angle
       }

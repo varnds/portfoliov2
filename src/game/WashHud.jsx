@@ -385,6 +385,23 @@ function AboutReveal() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 620, textAlign: "center" }}>
+        <img
+          src="/about/varna.jpg"
+          alt="Varna Das"
+          className="wash-anim"
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          style={{
+            width: 172,
+            height: 214,
+            objectFit: "cover",
+            borderRadius: 18,
+            display: "block",
+            margin: "0 auto 20px",
+            border: `3px solid ${ACCENT}`,
+            boxShadow: "0 16px 40px rgba(58,42,32,0.30)",
+            animation: "washHeadIn 0.8s ease both",
+          }}
+        />
         <div
           className="wash-anim"
           style={{
