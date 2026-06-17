@@ -1,12 +1,9 @@
 // BirdGuide — the SAME deep-orange bird that flies around the world (OrangeBird),
-// now acting as a COMPANION guide for Wash Day, modelled on the helper bird in
-// ASTRO BOT: it hovers just BEHIND-AND-ABOVE the player at shoulder/head height,
-// gently following wherever you go ("stay behind me"), never sitting on the ground
-// or blocking your view. When a new objective begins it darts toward the target to
-// point the way, then drifts back to its spot over your shoulder.
-//
-// The player's heading isn't published, so we DERIVE it from avatarPos movement
-// (velocity), smoothing it and holding the last heading while the player is still.
+// now acting as a COMPANION guide for Wash Day. It LEADS the way: it flies out
+// ahead of the player toward the current objective, hovering a bit above head
+// height (so it guides clearly without sitting in your face or on the ground).
+// Once you arrive it hovers over the spot; on a new objective it reaches further
+// ahead for a beat to show the direction.
 //
 // Targets per phase come from WashDay (targetRef, a live THREE.Vector3):
 //   seek→ground denim, carryDirty→washing machine, washing→machine, carryWet→peg,
@@ -31,14 +28,15 @@ const ACCENT = "#E2725B";
 const INK = "#3A2A20";
 const CREAM = "rgba(255,253,247,0.94)";
 
-// Companion "park" spot relative to the player's heading (world units).
-const BEHIND = 2.2; // how far back, opposite the heading
-const SIDE = 1.1; // offset to one side so it isn't dead-centre behind your head
-const SHOULDER_H = 2.0; // hover height above the GROUND at the bird's spot
+// The bird GUIDES from out in front: how far ahead of you it flies toward the
+// current objective, and how high it hovers (a bit above head height so it leads
+// clearly without sitting in your face).
+const LEAD = 3.0; // world units ahead, toward the objective
+const GUIDE_H = 2.7; // hover height above the ground at the lead spot
 
-// During the phase-change "point" beat the bird darts this far toward the target.
-const POINT_REACH = 3.4; // world units toward the target, measured from the player
-const POINT_DUR = 1.3; // seconds of point-then-return
+// On a new objective the bird reaches further ahead to show the way, then settles.
+const POINT_REACH = 4.2; // world units toward the target during the point beat
+const POINT_DUR = 1.3; // seconds of the point beat
 
 // Reusable scratch (no per-frame allocations).
 const _goal = new THREE.Vector3();
@@ -210,35 +208,25 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     // Point amount eases 0→1→0 (out toward target and back) over POINT_DUR.
     const pt = point.current > 0 ? Math.sin((1 - point.current / POINT_DUR) * Math.PI) : 0;
 
-    // ── The companion's resting spot: BEHIND-and-to-the-side of the player, at
-    // shoulder/head height — Astro-Bot style "over your shoulder". -h is opposite
-    // the heading (behind); the perpendicular (-hZ, hX) steps it gently aside.
-    _park.set(
-      a.x - hX * BEHIND - hZ * SIDE,
-      0, // y filled below from terrain
-      a.z - hZ * BEHIND + hX * SIDE
-    );
-
-    // Blend from the behind-the-shoulder spot toward a point reaching at the
-    // target during the point-dart (and during celebration it loops near the goal).
+    // ── The bird GUIDES: it flies out AHEAD of the player toward the current
+    // objective, leading the way — capped so it never overshoots the target (once
+    // you arrive it hovers over the spot). On a new objective it reaches a little
+    // further ahead (the point beat) to clearly show the direction.
     let baseX, baseZ;
     if (celebrate) {
       baseX = target.x;
       baseZ = target.z;
     } else {
-      // Point spot: out in front of the player, partway toward the objective.
-      const reach = Math.min(POINT_REACH, tdist);
-      const pointX = a.x + tux * reach;
-      const pointZ = a.z + tuz * reach;
-      baseX = _park.x + (pointX - _park.x) * pt;
-      baseZ = _park.z + (pointZ - _park.z) * pt;
+      const reach = Math.min(LEAD + (POINT_REACH - LEAD) * pt, tdist);
+      baseX = a.x + tux * reach;
+      baseZ = a.z + tuz * reach;
     }
 
-    // Hover a fixed height above the GROUND at the bird's spot (not the avatar's Y,
-    // which is high mid sky-drop and would fling the bird into the sky). Stays at
-    // shoulder/head height, never sinking into terrain.
+    // Hover a fixed height above the GROUND at the lead spot (not the avatar's Y,
+    // which is high mid sky-drop) — a bit ABOVE head height so it leads clearly
+    // without sitting in your face, and never sinks into the terrain.
     const baseY = celebrate ? target.y : terrainHeight(baseX, baseZ);
-    const hoverY = celebrate ? 2.4 : SHOULDER_H;
+    const hoverY = celebrate ? 2.6 : GUIDE_H;
     const circleR = celebrate ? 1.4 : 0.22; // tight bob while following; wide victory loop
     const circleSpd = celebrate ? 2.6 : 1.3;
     // Livelier bob (two frequencies) + a single up-hop during the flourish.
