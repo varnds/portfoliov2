@@ -31,6 +31,25 @@ const SPAWN = new THREE.Vector3(0, 42, 16);
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
+// Critically-damped spring toward a target ANGLE (shortest path). Unlike an
+// exponential lerp — which is fastest the instant the target jumps and then
+// crawls in asymptotically (the "lag, then snap behind you" feel) — this carries
+// angular velocity, so the camera eases in from rest AND eases out, trailing the
+// avatar as one continuous motion. `smoothTime` is roughly the seconds to catch
+// up. `velRef` is a mutable { current } holding the carried velocity.
+function smoothDampAngle(current, target, velRef, smoothTime, dt) {
+  const st = Math.max(0.0001, smoothTime);
+  const omega = 2 / st;
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  let delta = current - target; // shortest signed angle
+  delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+  const targetAdj = current - delta;
+  const temp = (velRef.current + omega * delta) * dt;
+  velRef.current = (velRef.current - omega * temp) * exp;
+  return targetAdj + (delta + temp) * exp;
+}
+
 function pickClip(names, includes, excludes = []) {
   if (!names || !names.length) return null;
   const rows = names.map((n) => ({ n, l: n.toLowerCase(), last: n.toLowerCase().split("|").pop() }));
@@ -195,6 +214,9 @@ export function Avatar() {
   const yaw = useRef(0);
   const pitch = useRef(0.38);
   const dist = useRef(8.5);
+  const yawVel = useRef(0); // carried angular velocity for the follow spring
+  const inDirX = useRef(0); // last raw input direction (camera target source)
+  const inDirZ = useRef(1);
   const yawT = useRef(0);
   const pitchT = useRef(0.38);
   const distT = useRef(8.5);
@@ -217,6 +239,7 @@ export function Avatar() {
     dropping.current = true;
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
+    yawVel.current = 0; // clear follow-spring momentum
     idle.current = 0;
     deathT.current = 0; // alive again on (re)start
     if (ref.current) ref.current.rotation.set(0, ref.current.rotation.y, 0);
@@ -344,6 +367,10 @@ export function Avatar() {
         moved = true;
         ix /= il;
         iz /= il;
+        // raw input dir — the camera's follow target reads this directly so the
+        // camera starts trailing the instant a key is pressed (no heading-smooth lag).
+        inDirX.current = ix;
+        inDirZ.current = iz;
         avatarPos.x += ix * speed * d;
         avatarPos.z += iz * speed * d;
         // smooth the heading, then ease the avatar's facing toward it
@@ -393,25 +420,26 @@ export function Avatar() {
     // (ArrowUp resolves to a fixed world direction per frame; the basis only
     // drifts as yaw eases behind it, which is the chase, not a curl.)
     let targetYaw = yawT.current;
-    let yawLambda = 9;
-    // "both" is the no-mouse auto-follow cam: the camera continuously sits behind
-    // the avatar's heading while moving (so a non-gamer always looks where they
-    // walk without touching the mouse) AND biases its focus ahead (below) to show
-    // more of the path in front. Frame-rate-independent exp damping at a quick
-    // lambda keeps it responsive like "free" without jerk or jitter. "free" is
-    // pure manual orbit.
+    // Manual drag / "free" orbit tracks the mouse promptly; the auto-follow cam
+    // trails more gently. Either way the SPRING below (not an exp lerp) carries
+    // velocity so the camera eases in and out as one continuous motion — no
+    // lag-then-snap when the heading changes.
+    let smoothTime = 0.12;
+    // "both" is the no-mouse auto-follow cam: while moving, the camera sits behind
+    // the avatar's heading so a non-gamer always looks where they walk without
+    // touching the mouse, and biases its focus ahead (below) to show the path.
     const autoChase = cameraMode === "both" && !drag.current;
     if (autoChase && moved) {
-      targetYaw = Math.atan2(-shx, -shz);
+      // target the RAW input direction (not the smoothed heading) so the camera
+      // begins moving the same frame the key goes down.
+      targetYaw = Math.atan2(-inDirX.current, -inDirZ.current);
       yawT.current = targetYaw; // keep manual-drag target in sync for seamless grab
-      yawLambda = 3.0; // GENTLE chase — was 6 (too fast/whippy); ease behind smoothly
+      smoothTime = 0.3; // gentle, continuous trail behind the heading
     } else if (autoChase && idle.current > 0.18) {
       targetYaw = yawT.current; // settled idle: hold the last chase yaw
-      yawLambda = 3.0;
+      smoothTime = 0.3;
     }
-    let dy = targetYaw - yaw.current;
-    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-    yaw.current += dy * (1 - Math.exp(-yawLambda * dt));
+    yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, smoothTime, d);
     pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
