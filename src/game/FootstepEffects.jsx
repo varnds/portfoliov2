@@ -118,8 +118,8 @@ const FX = {
     print: "#C7D6EA", pAlpha: 0.5, pLife: 8, pSize: [0.2, 0.33],
   },
   spring: {
-    // little flowers that puff out and tumble down
-    colors: ["#F4B6C2", "#FFF1F4", "#FFE08A", "#E5C2F0", "#F6A6A0"], n: 7, up: 0.6, out: 1.0, grav: -1.8,
+    // a few red flowers that puff out and tumble down (very sparse)
+    colors: ["#D63B3B", "#C42E2E", "#E05252", "#B82B2B"], n: 2, up: 0.6, out: 1.0, grav: -1.8,
     life: 1.0, size: 0.11, drift: 0.4, soft: false, flower: true, sway: 0.8,
     scuff: { color: "#B7CE9C", r: 0.48, life: 0.45, alpha: 0.26 },
     print: "#7C9A60", pAlpha: 0.24, pLife: 4, pSize: [0.18, 0.3],
