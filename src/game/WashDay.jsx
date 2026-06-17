@@ -61,8 +61,10 @@ const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the r
 // always flies ahead and the Track camera holds steady, so the wider spacing
 // reads as exploration, not the old jarring left↔right snap.
 //
-// Dirty denim lying on the grass at the pond's edge (front-left, clear of the water).
-const SEEK_XZ = [-11, 6];
+// Dirty denim lying on the grass front-LEFT of the line — kept clear of the pond
+// basin/waterline (a flat panel placed too close to the water sank into the bank
+// and read as "missing"). Still a visible left-ward stroll from spawn.
+const SEEK_XZ = [-5, 5];
 const SEEK_POS = new THREE.Vector3(SEEK_XZ[0], terrainHeight(SEEK_XZ[0], SEEK_XZ[1]), SEEK_XZ[1]);
 // Washing machine set up out by the camp tent (front-right landmark).
 const WASHER_XZ = [10, 12];
@@ -586,8 +588,9 @@ function SeekPanel({ visible }) {
     if (g.current) g.current.visible = visible;
   });
   return (
-    // sit flush on the terrain (tiny lift to avoid z-fighting with the ground)
-    <group ref={g} position={[SEEK_POS.x, SEEK_POS.y + 0.02, SEEK_POS.z]} rotation={[0, 0.7, 0]}>
+    // rest just above the terrain — enough lift that it never sinks into uneven
+    // ground / grass tufts and vanishes
+    <group ref={g} position={[SEEK_POS.x, SEEK_POS.y + 0.08, SEEK_POS.z]} rotation={[0, 0.7, 0]}>
       {/* laid flat on the ground: rotate the hanging panel down so it lies on the
           surface; centre it over the spot so it reads as a dropped, crumpled garment */}
       <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0.85]}>
