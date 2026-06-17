@@ -1,5 +1,6 @@
 /** PlayButton — drops the avatar into the 3D world / exits play mode. Shows a
- *  small progress count while playing. Only visible in the loaded 3D view. */
+ *  small progress count while playing. Renders in-flow inside the left control
+ *  rail (App.jsx), as the primary action at the top of the card. */
 import React from "react";
 import { useGame, startGame, endGame, totalCount } from "./gameStore";
 
@@ -11,23 +12,19 @@ export function PlayButton({ visible }) {
     <button
       onClick={() => (playing ? endGame() : startGame())}
       style={{
-        position: "fixed",
-        bottom: 74,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9000,
+        width: "100%",
         border: "none",
         cursor: "pointer",
         fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 700,
-        letterSpacing: 2,
+        letterSpacing: 1.5,
         textTransform: "uppercase",
         color: "#fff",
         background: "#E2725B",
-        borderRadius: 999,
-        padding: "12px 26px",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+        borderRadius: 10,
+        padding: "10px 12px",
+        boxShadow: "0 6px 16px rgba(226,114,91,0.3)",
       }}
     >
       {playing

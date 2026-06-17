@@ -3378,43 +3378,37 @@ export default function App() {
           </div>
           </div>
 
+          {/* Consolidated left control rail: one tidy card holding the primary
+              Play/Exit action plus the Game / Camera / Player pickers, instead of
+              several pills scattered across the corners. */}
           {scene3D && introComplete && (
             <div
               style={{
-                position: "absolute",
-                left: 24,
-                bottom: 88,
+                position: "fixed",
+                left: 16,
+                top: 84,
+                zIndex: 9000,
+                width: 196,
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 14px",
-                borderRadius: 999,
-                background: `${P.cloth}55`,
-                backdropFilter: "blur(16px)",
-                WebkitBackdropFilter: "blur(16px)",
-                border: `1px solid ${P.cloth}88`,
-                fontFamily: MONO,
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: 1.8,
-                color: `${P.ink}CC`,
-                zIndex: 12,
-                pointerEvents: "none",
+                flexDirection: "column",
+                gap: 10,
+                padding: 12,
+                borderRadius: 16,
+                background: "rgba(255,253,247,0.86)",
+                backdropFilter: "blur(12px) saturate(160%)",
+                WebkitBackdropFilter: "blur(12px) saturate(160%)",
+                border: "1px solid rgba(255,255,255,0.6)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <path d="M4 2v8M8 4v8M12 6v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <path d="M2 12h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.5" />
-              </svg>
-              DRAG TO EXPLORE
+              <PlayButton visible />
+              <ModeSelector visible />
+              <CameraSwitcher visible />
+              <AvatarSwitcher visible />
             </div>
           )}
-          {scene3D && introComplete && <PlayButton visible={scene3D && introComplete} />}
-          {scene3D && introComplete && <AvatarSwitcher visible={scene3D && introComplete} />}
-          {scene3D && introComplete && <CameraSwitcher visible={scene3D && introComplete} />}
           {scene3D && introComplete && <WelcomeCard />}
           {scene3D && introComplete && <ContextHint />}
-          {scene3D && introComplete && <ModeSelector visible={scene3D && introComplete} />}
           <RevealCard />
           {/* each HUD self-gates on its gameMode + playing state */}
           {scene3D && introComplete && <ChaseHud />}
