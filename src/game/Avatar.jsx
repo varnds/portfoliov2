@@ -29,8 +29,6 @@ const RUN_SPEED = 8.6;
 const WALK_REF = 3.0; // ground speed the walk clips are authored for
 const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
-const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
-const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is visible without rotating
 // ── Roblox-style manual turn: drag input maps 1:1 to the camera angle, applied the
 // SAME frame with no spring (Roblox accumulates a per-frame `rotateInput` delta and
 // resets it each Update — the camera turns exactly with the input, never lags or
@@ -46,6 +44,10 @@ const PITCH_MAX = 1.4; // ~80° — Roblox's MAX_Y clamp
 // second or two. This is the key to "no drastic rotation when I turn."
 const FOLLOW_RATE = 1.3; // exp approach toward the heading (time-constant ≈ 0.77s)
 const FOLLOW_MAX_SPEED = 1.2; // rad/s hard cap on camera turn speed (~69°/s)
+// Past this divergence the follow rotation fades out to 0 by 180°, so walking
+// straight BACKWARD doesn't spin the camera toward an antipodal target (the bug
+// that made the down arrow shake). ~137° → full follow below it, none at 180°.
+const FOLLOW_BACK_START = 2.4;
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
@@ -539,23 +541,21 @@ export function Avatar() {
     // camera never feeds back into the movement basis to curve a held key.
     // (ArrowUp resolves to a fixed world direction per frame; the basis only
     // drifts as yaw eases behind it, which is the chase, not a curl.)
-    // Three camera MODES:
-    //   • track  — LOCKED ¾ viewing angle: the camera glides to keep you centred
-    //              but its angle never changes (drag won't spin it, movement won't
-    //              swing it). Zero disorientation. The calm default.
-    //   • follow — Roblox Follow Mode: while you move, the camera CONTINUOUSLY +
-    //              gently trails behind your travel direction. No deadzone, no
-    //              snap; the turn is eased and hard speed-capped so it never whips.
+    // Two camera MODES:
+    //   • follow — Roblox Follow Mode (default): while you move, the camera
+    //              CONTINUOUSLY + gently trails behind your travel direction. No
+    //              deadzone, no snap; eased and hard speed-capped so it never whips.
+    //              Walking straight backward holds the angle (no antipodal spin).
     //   • free   — pure manual orbit: drag to spin the camera wherever you like.
     // ── Roblox-style manual turn: consume the accumulated drag delta and apply it
     // DIRECTLY to the live camera angle this frame — no spring, so left/right turning
     // tracks the input exactly (never lags behind, never snaps to catch up). We sync
     // the spring targets + zero its velocity so the smoothing below is a no-op while
-    // dragging. Track mode keeps its locked angle (drag ignored by design); zoom,
-    // position and the auto-follow drift stay smoothed. Matches Roblox, where
-    // rotateInput is applied to the look CFrame each Update and then reset.
+    // dragging. Drag works in both modes; zoom, position and the auto-follow drift
+    // stay smoothed. Matches Roblox, where rotateInput is applied to the look CFrame
+    // each Update and then reset.
     const ri = rotInput.current;
-    if ((ri.x || ri.y) && cameraMode !== "track") {
+    if (ri.x || ri.y) {
       yaw.current -= ri.x * TURN_YAW_SENS;
       yawT.current = yaw.current;
       yawVel.current = 0;
@@ -579,7 +579,15 @@ export function Avatar() {
         const headingYaw = Math.atan2(-inDirX.current, -inDirZ.current);
         let off = headingYaw - yaw.current;
         off = Math.atan2(Math.sin(off), Math.cos(off)); // shortest signed angle
-        let step = off * (1 - Math.exp(-FOLLOW_RATE * d)); // eased fraction toward heading
+        // Don't chase a near-backward heading. When you walk straight back, the
+        // target is ~180° away (antipodal) — and atan2 is sign-unstable right at
+        // ±π — so blindly easing toward it makes the camera spin/jitter (the
+        // down-arrow "shake"). Fade the follow weight to 0 across the back arc, so
+        // backward movement just glides and the camera holds its angle. Forward and
+        // left/right turning (|off| ≤ FOLLOW_BACK_START) are completely unaffected.
+        const aOff = Math.abs(off);
+        const w = aOff <= FOLLOW_BACK_START ? 1 : Math.max(0, (Math.PI - aOff) / (Math.PI - FOLLOW_BACK_START));
+        let step = off * w * (1 - Math.exp(-FOLLOW_RATE * d)); // eased fraction toward heading
         const maxStep = FOLLOW_MAX_SPEED * d; // hard cap: never turn faster than this
         if (step > maxStep) step = maxStep;
         else if (step < -maxStep) step = -maxStep;
@@ -588,15 +596,12 @@ export function Avatar() {
       }
       yawVel.current = 0; // follow drives yaw directly — no spring momentum to carry
     } else {
-      // track: settle to the fixed angle; free: settle to the drag target (a no-op
-      // right after a direct drag, since yawT was synced to yaw above).
-      const targetYaw = cameraMode === "track" ? TRACK_YAW : yawT.current;
-      yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, 0.12, d);
+      // free: settle to the drag target (a no-op right after a direct drag, since
+      // yawT was synced to yaw above).
+      yaw.current = smoothDampAngle(yaw.current, yawT.current, yawVel, 0.12, d);
     }
-    // Track holds a fixed, higher top-down pitch (ignores drag) so you see every
-    // direction without rotating; Follow/Free use the drag-set pitch.
-    const pitchTarget = cameraMode === "track" ? TRACK_PITCH : pitchT.current;
-    pitch.current = THREE.MathUtils.damp(pitch.current, pitchTarget, 10, dt);
+    // Follow / Free both use the drag-set pitch.
+    pitch.current = THREE.MathUtils.damp(pitch.current, pitchT.current, 10, dt);
     dist.current = THREE.MathUtils.damp(dist.current, distT.current, 8, dt);
 
     // Look-ahead (follow mode only) from the SMOOTHED heading; eases to 0 when idle.

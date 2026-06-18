@@ -204,10 +204,12 @@ export function WashHud() {
             alignItems: "center",
             gap: 10,
             padding: "10px 16px",
-            borderRadius: 999,
-            background: "rgba(255,253,247,0.92)",
+            // Same rounded-rectangle-with-border card as the in-world bird bubble
+            // (BirdGuide SpeechBubble) so the two read as one consistent component.
+            borderRadius: 14,
+            background: "rgba(255,253,247,0.94)",
             border: `1.5px solid ${ACCENT}`,
-            boxShadow: "0 8px 24px rgba(58,42,32,0.2)",
+            boxShadow: "0 8px 22px rgba(58,42,32,0.28)",
             fontFamily: "'IBM Plex Mono', monospace",
             fontSize: 14,
             lineHeight: 1.4,

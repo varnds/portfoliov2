@@ -63,7 +63,7 @@ const PEG_POINT = clotheslinePoint(PEG_T, LINE.L, LINE.R); // [x, y, z] at the r
 // the world — the POND (left) and the TENT (right) — so Wash Day doubles as a
 // little tour: spawn (~0,16) → muddy denim down by the water → across to the
 // washing machine by the tent → back to the empty peg on the line. The bird
-// always flies ahead and the Track camera holds steady, so the wider spacing
+// always flies ahead and the Follow camera trails gently, so the wider spacing
 // reads as exploration, not the old jarring left↔right snap.
 //
 // Dirty denim far on the LEFT down by the pond (kept clear of the basin/waterline
@@ -498,7 +498,7 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
     // soft interior fill brightens with the agitation so you can read the clothes
     // tumbling through the glass; a faint flicker sells the sloshing water
     if (fill.current) {
-      fill.current.intensity = 0.5 + (washing ? 0.5 : 0) + ag * 0.7 + Math.sin(t * 18) * 0.06 * ag;
+      fill.current.intensity = 0.9 + (washing ? 0.6 : 0) + ag * 0.7 + Math.sin(t * 18) * 0.06 * ag;
     }
 
     if (suds.current) {
@@ -572,59 +572,60 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
           />
         </mesh>
 
-        {/* porthole / door — you can SEE INSIDE the drum through clear glass */}
-        <group position={[0, 0.6, 0.47]}>
+        {/* porthole / door — a BIG clear-glass window so you clearly SEE INSIDE the
+            drum: the fins + the denim load tumbling around while it washes. */}
+        <group position={[0, 0.58, 0.47]}>
           {/* chrome bezel ring */}
           <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.34, 0.34, 0.06, 24]} />
+            <cylinderGeometry args={[0.44, 0.44, 0.06, 28]} />
             <meshStandardMaterial color="#C2C8D0" roughness={0.5} metalness={0} />
           </mesh>
 
           {/* recessed drum cavity behind the glass — sits back so the clothes have
-              depth to tumble in. A bright interior wall + a small fill light let the
+              depth to tumble in. A bright interior wall + a fill light let the
               tumbling load read clearly through the glass. */}
-          <group position={[0, 0, -0.12]}>
+          <group position={[0, 0, -0.13]}>
             {/* soft interior fill light so the inside isn't a black void */}
             <pointLight
               ref={fill}
-              position={[0, 0, 0.08]}
-              distance={0.9}
+              position={[0, 0, 0.1]}
+              distance={1.1}
               decay={2}
-              intensity={0.5}
+              intensity={0.9}
               color="#EAF2FF"
             />
             {/* back wall of the drum (brightened so silhouettes pop) */}
             <mesh position={[0, 0, -0.06]}>
-              <circleGeometry args={[0.3, 24]} />
-              <meshStandardMaterial color="#D9E4F0" roughness={0.85} metalness={0} emissive="#9fb4cc" emissiveIntensity={0.25} />
+              <circleGeometry args={[0.4, 28]} />
+              <meshStandardMaterial color="#E2EBF5" roughness={0.85} metalness={0} emissive="#a9bdd4" emissiveIntensity={0.45} />
             </mesh>
 
             {/* the spinning drum: fins + the tumbling denim load */}
             <group ref={drum}>
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <mesh key={i} rotation={[0, 0, (i / 6) * Math.PI * 2]} position={[0, 0, 0.01]}>
-                  <boxGeometry args={[0.5, 0.02, 0.02]} />
-                  <meshStandardMaterial color="#7d92a8" roughness={0.7} metalness={0} />
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <mesh key={i} rotation={[0, 0, (i / 8) * Math.PI * 2]} position={[0, 0, 0.01]}>
+                  <boxGeometry args={[0.7, 0.026, 0.026]} />
+                  <meshStandardMaterial color="#6f879f" roughness={0.7} metalness={0} />
                 </mesh>
               ))}
 
               {/* the denim jacket as a clothes mass that tumbles WITH the drum,
                   visible specifically while washing / jacketInDrum */}
               {jacketInDrum && (
-                <group ref={jacket} position={[0, -0.02, 0.04]}>
+                <group ref={jacket} position={[0, -0.02, 0.05]}>
                   {/* main crumpled body */}
                   <mesh rotation={[0, 0, 0.3]}>
-                    <boxGeometry args={[0.26, 0.2, 0.09]} />
+                    <boxGeometry args={[0.32, 0.24, 0.11]} />
                     <meshStandardMaterial color="#6E90BC" roughness={0.95} metalness={0} />
                   </mesh>
                   {/* a folded sleeve flung out to one side */}
-                  <mesh position={[0.14, 0.05, 0.01]} rotation={[0, 0, -0.6]}>
-                    <boxGeometry args={[0.16, 0.08, 0.07]} />
+                  <mesh position={[0.17, 0.06, 0.01]} rotation={[0, 0, -0.6]}>
+                    <boxGeometry args={[0.2, 0.1, 0.08]} />
                     <meshStandardMaterial color="#A6C0DC" roughness={0.95} metalness={0} />
                   </mesh>
                   {/* a darker denim fold for depth */}
-                  <mesh position={[-0.08, -0.07, 0.02]} rotation={[0, 0, 0.9]}>
-                    <boxGeometry args={[0.13, 0.07, 0.06]} />
+                  <mesh position={[-0.1, -0.08, 0.02]} rotation={[0, 0, 0.9]}>
+                    <boxGeometry args={[0.16, 0.09, 0.07]} />
                     <meshStandardMaterial color="#4E6E96" roughness={0.95} metalness={0} />
                   </mesh>
                 </group>
@@ -632,23 +633,24 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
             </group>
           </group>
 
-          {/* clear glass door — low opacity, slight cool tint, so the drum reads
-              through it. depthWrite off so the interior isn't occluded. */}
-          <mesh position={[0, 0, 0.02]}>
-            <circleGeometry args={[0.28, 24]} />
+          {/* clear glass door — very low opacity, slight cool tint, so the drum
+              reads through it. depthWrite off so the interior isn't occluded. */}
+          <mesh position={[0, 0, 0.03]}>
+            <circleGeometry args={[0.38, 28]} />
             <meshStandardMaterial
               color="#cfe2f2"
               roughness={0.05}
               metalness={0}
               transparent
-              opacity={0.18}
+              opacity={0.1}
               depthWrite={false}
             />
           </mesh>
-          {/* a faint specular highlight smear on the glass to sell that it's glass */}
-          <mesh position={[-0.09, 0.09, 0.025]} rotation={[0, 0, -0.5]}>
-            <planeGeometry args={[0.16, 0.06]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.22} depthWrite={false} />
+          {/* a faint specular highlight smear toward the rim to sell that it's glass
+              (kept small + to the edge so it doesn't cover the view inside) */}
+          <mesh position={[-0.17, 0.17, 0.035]} rotation={[0, 0, -0.5]}>
+            <planeGeometry args={[0.13, 0.045]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.12} depthWrite={false} />
           </mesh>
         </group>
 

@@ -48,7 +48,7 @@ function SpeechBubble({ text }) {
   if (!text) return null;
   return (
     <Html
-      position={[0, 1.15, 0]}
+      position={[0, 0.82, 0]}
       center
       distanceFactor={6}
       occlude={false}
@@ -141,6 +141,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const posRef = useRef(null); // current flown position (smoothed)
   const lastPhase = useRef(phase); // detect a new objective → point-dart + flourish
   const flourish = useRef(0); // seconds left of an excited spin+hop on a new leg
+  const roll = useRef(0); // seconds left of a delighted barrel-roll on grab/load
   const point = useRef(0); // seconds left of the "dart toward target then return"
   const wasActive = useRef(false); // detect the spawn (avatarActive rising edge)
   const greet = useRef(0); // seconds left of the "hello, right beside you" beat at spawn
@@ -219,10 +220,18 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
       lastPhase.current = phase;
       flourish.current = 1.2; // excited little spin + hop
       point.current = POINT_DUR; // dart toward the goal, then drift back behind you
+      // The two "you did it!" beats — grabbing the denim and loading the washer —
+      // get an extra delighted BARREL ROLL on top of the twirl. (carryWet is the
+      // grab after the wash.)
+      if (phase === "carryDirty" || phase === "washing" || phase === "carryWet") {
+        roll.current = 0.7;
+      }
     }
     flourish.current = Math.max(0, flourish.current - d);
+    roll.current = Math.max(0, roll.current - d);
     point.current = Math.max(0, point.current - d);
     const fl = flourish.current > 0 ? flourish.current / 1.2 : 0; // 1→0 over the flourish
+    const rl = roll.current > 0 ? roll.current / 0.7 : 0; // 1→0 over the barrel roll
     // Point amount eases 0→1→0 (out toward target and back) over POINT_DUR.
     const pt = point.current > 0 ? Math.sin((1 - point.current / POINT_DUR) * Math.PI) : 0;
 
@@ -289,8 +298,11 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     }
     // A happy full twirl at the start of each leg (one spin over the flourish).
     g.rotation.y = faceYaw + (fl > 0 ? (1 - fl) * Math.PI * 2 : 0);
-    // Lively banking roll, tipped harder during the flourish + celebration.
-    g.rotation.z = Math.sin(t * 1.3) * 0.2 + fl * 0.5 + (celebrate ? 0.35 : 0);
+    // Lively banking roll, tipped harder during the flourish + celebration, PLUS a
+    // full delighted barrel roll (one revolution about the forward axis) when you
+    // grab the denim or load the washer.
+    g.rotation.z =
+      Math.sin(t * 1.3) * 0.2 + fl * 0.5 + (celebrate ? 0.35 : 0) + (rl > 0 ? (1 - rl) * Math.PI * 2 : 0);
 
     // wing flap — quick and eager; flutters even faster during the flourish/point.
     const flapSpd = celebrate ? 24 : fl > 0 || pt > 0.2 ? 28 : 15;

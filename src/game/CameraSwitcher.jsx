@@ -1,11 +1,10 @@
-/** Camera controls in the left rail: follow MODE (Track / Follow / Free) and a
- *  framing DISTANCE toggle (Near / Far). All exposed as toggles. */
+/** Camera controls in the left rail: MODE (Follow / Free) and a framing DISTANCE
+ *  toggle (Near / Far). All exposed as toggles. */
 import React from "react";
 import { useGame, setCameraMode, setCameraDist } from "./gameStore";
 import { RAIL_LABEL, RAIL_ROW, railChip } from "./railStyles";
 
 const MODES = [
-  { id: "track", label: "Track" },
   { id: "follow", label: "Follow" },
   { id: "free", label: "Free" },
 ];
