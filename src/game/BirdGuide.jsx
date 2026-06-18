@@ -15,7 +15,7 @@
 //   • celebrate  — true during the ~2.5s line-complete beat (victory loop).
 //
 // Scratch vectors are reused; nothing is allocated per frame.
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -156,22 +156,6 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   // drei <Html> doesn't auto-hide when its 3D parent is invisible, so gate the
   // bubble's RENDER on `landed` — otherwise the bird's words show before you spawn.
   const { landed } = useGame();
-
-  // The guide bird must ALWAYS be visible — it's a waypoint, not set dressing. Tall
-  // scenery (the washing machine, the tent) would otherwise hide it. Render its
-  // meshes on top of the world (depthTest off + a high renderOrder) so it's never
-  // occluded. (Self-occlusion falls back to draw order, which is fine for a small
-  // low-poly bird.) depthWrite stays on so it doesn't bleed into later passes.
-  useEffect(() => {
-    const g = root.current;
-    if (!g) return;
-    g.traverse((o) => {
-      if (o.isMesh && o.material) {
-        o.material.depthTest = false;
-        o.renderOrder = 999;
-      }
-    });
-  }, []);
 
   useFrame((st, dt) => {
     const g = root.current;
