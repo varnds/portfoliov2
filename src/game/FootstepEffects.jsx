@@ -294,6 +294,17 @@ export function FootstepEffects({ seasonKey }) {
       s.m.material.opacity = s.alpha0 * Math.min(1, k * 5) * k; // quick in, fade as it spreads
     }
 
+    // ── landing burst — fires for jumps AND the drop-in entrance. Runs even
+    // BEFORE the avatar is "active", so the SEASON ground particles (sand / snow /
+    // leaves / petals) kick up the instant it touches down, exactly like a footfall.
+    const groundY = terrainHeight(avatarPos.x, avatarPos.z);
+    const air = avatarPos.y > groundY + 0.2;
+    if (wasAir.current && !air) {
+      emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.8, 1.7);
+      emitScuff(fx, avatarPos.x, avatarPos.z, groundY, 2.4);
+    }
+    wasAir.current = air;
+
     if (!avatarActive) {
       prev.current = null;
       return;
@@ -309,15 +320,6 @@ export function FootstepEffects({ seasonKey }) {
     prev.current.copy(avatarPos);
     const horiz = Math.hypot(dx, dz);
     const speed = horiz / dt;
-    const groundY = terrainHeight(avatarPos.x, avatarPos.z);
-
-    // jump / fall landing → one big burst
-    const air = avatarPos.y > groundY + 0.2;
-    if (wasAir.current && !air) {
-      emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.2, 1.5);
-      emitScuff(fx, avatarPos.x, avatarPos.z, groundY, 1.8);
-    }
-    wasAir.current = air;
 
     if (horiz < 1e-4) return;
     const dirX = dx / horiz;

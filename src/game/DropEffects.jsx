@@ -91,22 +91,27 @@ export function DropBurst({ seqRef, kindRef }) {
   );
 }
 
+// Dome sits this high ABOVE the harness pivot (which is at the avatar's shoulders).
+const DOME_Y = 1.55;
+
 export function ParachuteCanopy({ canopyRef }) {
   const g = useRef();
-  // Precompute the shroud lines: thin cords from the dome rim converging to a
-  // harness point below (where the avatar hangs).
+  // Shroud lines: thin cords from the dome rim (up at DOME_Y) converging to the
+  // HARNESS at the group origin (0,0,0) — which sits on the avatar. Pivoting the
+  // whole group at the harness makes the canopy swing ABOVE while the cords stay
+  // attached to the body.
   const strings = React.useMemo(() => {
     const arr = [];
     const NS = 8;
     const rimR = 0.92;
-    const low = new THREE.Vector3(0, -1.35, 0); // harness point (relative to rim plane)
+    const harness = new THREE.Vector3(0, 0, 0);
     const up = new THREE.Vector3(0, 1, 0);
     for (let i = 0; i < NS; i += 1) {
       const a = (i / NS) * Math.PI * 2;
-      const rim = new THREE.Vector3(Math.cos(a) * rimR, 0, Math.sin(a) * rimR);
-      const dir = low.clone().sub(rim);
+      const rim = new THREE.Vector3(Math.cos(a) * rimR, DOME_Y, Math.sin(a) * rimR);
+      const dir = harness.clone().sub(rim);
       const len = dir.length();
-      const mid = rim.clone().add(low).multiplyScalar(0.5);
+      const mid = rim.clone().add(harness).multiplyScalar(0.5);
       const q = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
       arr.push({ pos: [mid.x, mid.y, mid.z], quat: [q.x, q.y, q.z, q.w], len });
     }
@@ -120,30 +125,31 @@ export function ParachuteCanopy({ canopyRef }) {
     grp.visible = s > 0.01;
     if (s <= 0.01) return;
     const t = st.clock.elapsedTime;
-    // sit above the avatar; gentle pendulum sway (matches the avatar's tilt)
-    grp.position.set(avatarPos.x + Math.sin(t * 2.1) * 0.25, avatarPos.y + 2.7, avatarPos.z);
-    grp.rotation.z = Math.sin(t * 2.1) * 0.14;
+    // harness pivot ON the avatar's shoulders; the group rocks gently so the
+    // canopy swings overhead while the cords stay attached.
+    grp.position.set(avatarPos.x, avatarPos.y + 1.55, avatarPos.z);
+    grp.rotation.z = Math.sin(t * 2.0) * 0.12;
     grp.scale.setScalar(s);
   });
 
   return (
     <group ref={g} visible={false}>
-      {/* rounded canopy dome (top hemisphere) */}
-      <mesh position={[0, 0, 0]} castShadow>
+      {/* rounded canopy dome (top hemisphere), up above the harness */}
+      <mesh position={[0, DOME_Y, 0]} castShadow>
         <sphereGeometry args={[1.0, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial color="#E2725B" roughness={0.82} side={THREE.DoubleSide} />
       </mesh>
-      {/* cream gores band just under the crown for a printed-panel feel */}
-      <mesh position={[0, 0.42, 0]} castShadow>
+      {/* cream crown band for a printed-panel feel */}
+      <mesh position={[0, DOME_Y + 0.42, 0]} castShadow>
         <sphereGeometry args={[0.78, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2.4]} />
         <meshStandardMaterial color="#F3E4CF" roughness={0.85} side={THREE.DoubleSide} />
       </mesh>
       {/* scalloped rim */}
-      <mesh position={[0, 0, 0]}>
+      <mesh position={[0, DOME_Y, 0]}>
         <torusGeometry args={[0.96, 0.05, 8, 22]} />
         <meshStandardMaterial color="#C45B45" roughness={0.85} />
       </mesh>
-      {/* shroud lines converging to the harness */}
+      {/* shroud lines converging to the harness (group origin = on the avatar) */}
       {strings.map((s, i) => (
         <mesh key={i} position={s.pos} quaternion={s.quat}>
           <cylinderGeometry args={[0.012, 0.012, s.len, 5]} />

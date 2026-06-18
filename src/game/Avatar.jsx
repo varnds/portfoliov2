@@ -39,20 +39,20 @@ const JUMP_H = 1.7;
 // spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
 // (burst fires); KIND = the burst flavour. The squash/scale flair lives in
 // AvatarModel and is applied to an INNER group so it never touches rig.scale.
-const DROP_DUR = { bounce: 0.95, parachute: 1.7, comet: 1.05, pop: 0.55 };
+const DROP_DUR = { bounce: 0.95, parachute: 1.7, comet: 2.3, pop: 0.55 };
 // Start the fall LOW enough that the avatar is in the (ground-framed) shot for the
 // whole descent, so you actually see the entrance instead of it happening above
 // the top edge. Parachute starts lowest (a gentle in-frame float); pop doesn't fall.
-const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 15, pop: 0 };
+const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 11, pop: 0 };
 const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
 function dropFall(p, style) {
   if (style === "pop") return 1; // no fall — already on the ground, just pops in
   if (style === "comet") {
-    // ONE steep accelerating plunge to the ground by 0.6, then it stays (a crash,
-    // no bounce). The longer fall lets the streak read on the way down.
+    // ONE gentle accelerating descent to the ground by 0.6, then it settles (a
+    // slow shooting-star arrival, not a crash). The long fall lets the streak read.
     if (p >= 0.6) return 1;
     const f = p / 0.6;
-    return f * f * f;
+    return f * f; // ease-in, but softer than a cube
   }
   if (style === "parachute") return 1 - Math.pow(1 - Math.min(1, p), 1.8); // gentle, ease-out
   // bounce: a quick plunge, then ONE clean rebound that settles.
@@ -486,12 +486,17 @@ export function Avatar() {
       canopyRef.current = cy;
       // comet streak: a stretched trail above the avatar during the plunge.
       streakRef.current = style === "comet" && p < 0.6 ? Math.min(1, p * 5) : 0;
-      // fire the impact burst once, at the style's arrival moment
+      // fire the impact flair once, at the style's arrival moment. The SEASON
+      // ground burst (FootstepEffects, on touchdown) kicks up the dust for every
+      // style; here we only add the magical SPARKLE for parachute/pop, and a
+      // gentle thud-shake for the comet.
       if (!burstFired.current && p >= (DROP_IMPACT[style] || 1)) {
         burstFired.current = true;
-        poofKind.current = style === "comet" ? "blast" : style === "bounce" ? "dust" : "sparkle";
-        poofSeq.current += 1;
-        if (style === "comet") shakeRef.current = 0.85; // bigger crash
+        if (style === "parachute" || style === "pop") {
+          poofKind.current = "sparkle";
+          poofSeq.current += 1;
+        }
+        if (style === "comet") shakeRef.current = 0.3; // soft thud, not a crash
       }
       if (p >= 1) {
         avatarPos.y = groundY;
