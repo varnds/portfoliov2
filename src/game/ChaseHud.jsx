@@ -7,8 +7,8 @@
 // pills, terracotta #E2725B accent, soft shadows).
 import React from "react";
 import { useGame } from "./gameStore";
+import { pill, ACCENT } from "./uiKit";
 
-const ACCENT = "#E2725B";
 const MAX_HITS = 3;
 
 export function ChaseHud() {
@@ -56,18 +56,10 @@ export function ChaseHud() {
       {/* "RUN!" pill — top-center, complementary to PlayButton's count. */}
       <div
         style={{
+          ...pill,
           position: "absolute",
-          top: 20,
+          top: 18,
           left: "50%",
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          padding: "7px 14px",
-          borderRadius: 999,
-          background: "rgba(255,253,247,0.82)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.16)",
           animation: "chaseRunPulse 1.1s ease-in-out infinite",
         }}
       >
@@ -108,18 +100,10 @@ export function ChaseHud() {
       {/* Lives indicator — top-right hearts + a plain-words count. */}
       <div
         style={{
+          ...pill,
           position: "absolute",
-          top: 20,
-          right: 20,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "7px 14px",
-          borderRadius: 999,
-          background: "rgba(255,253,247,0.82)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.16)",
+          top: 18,
+          right: 18,
         }}
       >
         <span

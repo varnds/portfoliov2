@@ -16,19 +16,19 @@ export function PlayButton({ visible }) {
         border: "none",
         cursor: "pointer",
         fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 700,
-        letterSpacing: 1.5,
+        letterSpacing: 1.2,
         textTransform: "uppercase",
         color: "#fff",
         background: "#E2725B",
-        borderRadius: 10,
-        padding: "10px 12px",
-        boxShadow: "0 6px 16px rgba(226,114,91,0.3)",
+        borderRadius: 9,
+        padding: "8px 10px",
+        boxShadow: "0 5px 14px rgba(226,114,91,0.28)",
       }}
     >
       {playing
-        ? `Exit · ${discovered.size}${total ? `/${total}` : ""} found${landed ? "" : " · landing…"}`
+        ? `${landed ? "Exit" : "Landing…"} · ${discovered.size}${total ? `/${total}` : ""}`
         : "▶ Play"}
     </button>
   );

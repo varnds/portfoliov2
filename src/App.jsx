@@ -3385,20 +3385,20 @@ export default function App() {
             <div
               style={{
                 position: "fixed",
-                left: 16,
-                top: 84,
+                left: 14,
+                top: 80,
                 zIndex: 9000,
-                width: 196,
+                width: 168,
                 display: "flex",
                 flexDirection: "column",
-                gap: 10,
-                padding: 12,
-                borderRadius: 16,
-                background: "rgba(255,253,247,0.86)",
-                backdropFilter: "blur(12px) saturate(160%)",
-                WebkitBackdropFilter: "blur(12px) saturate(160%)",
-                border: "1px solid rgba(255,255,255,0.6)",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                gap: 8,
+                padding: 9,
+                borderRadius: 14,
+                background: "rgba(255,253,247,0.82)",
+                backdropFilter: "blur(12px) saturate(150%)",
+                WebkitBackdropFilter: "blur(12px) saturate(150%)",
+                border: "1px solid rgba(255,255,255,0.55)",
+                boxShadow: "0 8px 22px rgba(58,42,32,0.14)",
               }}
             >
               <PlayButton visible />

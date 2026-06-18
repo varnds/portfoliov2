@@ -6,6 +6,7 @@
  */
 import React from "react";
 import { useGame, dismissWelcome } from "./gameStore";
+import { card, primaryBtn, glass, SUBINK } from "./uiKit";
 
 const wrap = {
   position: "fixed",
@@ -36,13 +37,11 @@ export function WelcomeCard() {
     >
       <div
         style={{
+          ...card,
           pointerEvents: "auto",
           maxWidth: 440,
           width: "86%",
-          background: "#FFFDF7",
-          borderRadius: 16,
           padding: "26px 32px",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
           textAlign: "center",
         }}
       >
@@ -68,16 +67,10 @@ export function WelcomeCard() {
         <button
           onClick={dismissWelcome}
           style={{
+            ...primaryBtn,
             marginTop: 18,
-            border: "none",
-            cursor: "pointer",
             fontSize: 12,
-            fontWeight: 700,
             letterSpacing: 2,
-            textTransform: "uppercase",
-            color: "#fff",
-            background: "#E2725B",
-            borderRadius: 999,
             padding: "10px 22px",
           }}
         >
@@ -105,17 +98,14 @@ export function ContextHint() {
     <div
       style={{
         ...wrap,
+        ...glass,
         top: 18,
-        padding: "9px 18px",
+        padding: "8px 16px",
         borderRadius: 999,
-        background: "rgba(255,253,247,0.86)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: 600,
         letterSpacing: 0.5,
-        color: "#5A463A",
+        color: SUBINK,
         pointerEvents: "none",
         whiteSpace: "nowrap",
       }}

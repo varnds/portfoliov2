@@ -5,10 +5,7 @@
 // labels, cream pills, terracotta accent, Fraunces headline).
 import React from "react";
 import { useGame, endGame } from "./gameStore";
-
-const ACCENT = "#E2725B";
-const INK = "#3A2A20";
-const SUBINK = "#5A463A";
+import { card, primaryBtn, ACCENT, INK, SUBINK } from "./uiKit";
 
 export function DeathOverlay() {
   const { gameMode, playing, dead } = useGame();
@@ -51,13 +48,10 @@ export function DeathOverlay() {
 
       <div
         style={{
+          ...card,
           textAlign: "center",
           maxWidth: 420,
-          background: "#FFFDF7",
-          borderRadius: 18,
           padding: "34px 32px 30px",
-          boxShadow: "0 22px 54px rgba(58,42,32,0.22)",
-          border: "1px solid rgba(226,114,91,0.16)",
           animation: "deathCardIn 0.55s cubic-bezier(0.2,0.7,0.3,1) both",
         }}
       >
@@ -114,18 +108,10 @@ export function DeathOverlay() {
           className="death-pill"
           onClick={endGame}
           style={{
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "'IBM Plex Mono', monospace",
+            ...primaryBtn,
             fontSize: 13,
-            fontWeight: 700,
             letterSpacing: 2,
-            textTransform: "uppercase",
-            color: "#fff",
-            background: ACCENT,
-            borderRadius: 999,
             padding: "12px 28px",
-            boxShadow: "0 10px 26px rgba(226,114,91,0.34)",
           }}
         >
           ↺ Try again
