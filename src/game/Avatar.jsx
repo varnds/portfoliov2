@@ -31,6 +31,14 @@ const RUN_REF = 6.6;
 const SPAWN = new THREE.Vector3(0, 42, 16);
 const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
 const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is visible without rotating
+// ── Roblox-style manual turn: drag input maps 1:1 to the camera angle, applied the
+// SAME frame with no spring (Roblox accumulates a per-frame `rotateInput` delta and
+// resets it each Update — the camera turns exactly with the input, never lags or
+// snaps). Sensitivities ≈ Roblox's; pitch clamped like its MIN_Y/MAX_Y (±~80°).
+const TURN_YAW_SENS = 0.005; // rad per pixel of horizontal drag
+const TURN_PITCH_SENS = 0.004; // rad per pixel of vertical drag
+const PITCH_MIN = 0.06; // ~3° above horizon (never under the ground)
+const PITCH_MAX = 1.4; // ~80° — Roblox's MAX_Y clamp
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
@@ -265,6 +273,7 @@ export function Avatar() {
   const inDirZ = useRef(1);
   const yawT = useRef(0);
   const pitchT = useRef(0.38);
+  const rotInput = useRef({ x: 0, y: 0 }); // accumulated drag delta (Roblox rotateInput)
   const distT = useRef(8.5);
   const drag = useRef(false);
   const last = useRef({ x: 0, y: 0 });
@@ -339,8 +348,10 @@ export function Avatar() {
       const dx = e.clientX - last.current.x;
       const dy = e.clientY - last.current.y;
       last.current = { x: e.clientX, y: e.clientY };
-      yawT.current -= dx * 0.005;
-      pitchT.current = Math.min(1.2, Math.max(0.06, pitchT.current + dy * 0.004));
+      // Accumulate the raw drag delta (Roblox's `rotateInput`). The frame loop
+      // applies it DIRECTLY to the live camera angle and zeroes it — 1:1, no lag.
+      rotInput.current.x += dx;
+      rotInput.current.y += dy;
     };
     const onUp = () => { drag.current = false; };
     const onWheel = (e) => {
@@ -532,6 +543,24 @@ export function Avatar() {
     //   • free   — pure manual orbit: drag to spin the camera wherever you like.
     // (This is the concrete Track-vs-Free difference: Track's yaw is fixed; Free's
     // yaw follows your drag.)
+    // ── Roblox-style manual turn: consume the accumulated drag delta and apply it
+    // DIRECTLY to the live camera angle this frame — no spring, so left/right turning
+    // tracks the input exactly (never lags behind, never snaps to catch up). We sync
+    // the spring targets + zero its velocity so the smoothing below is a no-op while
+    // dragging. Track mode keeps its locked angle (drag ignored by design); zoom,
+    // position and the auto-follow drift stay smoothed. Matches Roblox, where
+    // rotateInput is applied to the look CFrame each Update and then reset.
+    const ri = rotInput.current;
+    if ((ri.x || ri.y) && cameraMode !== "track") {
+      yaw.current -= ri.x * TURN_YAW_SENS;
+      yawT.current = yaw.current;
+      yawVel.current = 0;
+      pitch.current = Math.min(PITCH_MAX, Math.max(PITCH_MIN, pitch.current + ri.y * TURN_PITCH_SENS));
+      pitchT.current = pitch.current;
+    }
+    ri.x = 0;
+    ri.y = 0;
+
     let targetYaw = cameraMode === "track" ? TRACK_YAW : yawT.current;
     let smoothTime = 0.12; // manual / track: settle to the chosen angle promptly
     const follow = cameraMode === "follow" && !drag.current;
