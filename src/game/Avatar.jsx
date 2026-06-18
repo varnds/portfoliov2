@@ -325,8 +325,12 @@ export function Avatar() {
   const idle = useRef(0); // seconds since last movement
   const deathT = useRef(0); // seconds into the death topple (0 = alive)
 
-  const { playing, avatarVariant, cameraMode, cameraDist, dropStyle } = useGame();
+  const { playing, avatarVariant, cameraMode, cameraDist, dropStyle, welcomeSeen } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
+  // live mirror so the frame loop can gate the drop on the welcome modal being
+  // dismissed, without re-subscribing.
+  const welcomeSeenRef = useRef(welcomeSeen);
+  welcomeSeenRef.current = welcomeSeen;
 
   // Near / Far framing preset → snap the camera distance target (scroll can still
   // fine-tune afterward).
@@ -446,7 +450,21 @@ export function Avatar() {
       return;
     }
 
-    if (dropping.current) {
+    if (dropping.current && !welcomeSeenRef.current) {
+      // WAIT for the welcome modal to be dismissed before the entrance plays —
+      // the avatar stays up out of frame (hidden below) while the camera holds on
+      // the spawn ground, so the modal sits over a clean establishing shot. The
+      // moment you hit "Start exploring", the drop begins as a clear reveal.
+      avatarPos.y = SPAWN.y;
+      motion.current.drop = 0;
+      ref.current.position.copy(avatarPos);
+      ref.current.visible = false;
+      motion.current.moving = false;
+      motion.current.running = false;
+      motion.current.jumping = false;
+      motion.current.speed = 0;
+    } else if (dropping.current) {
+      ref.current.visible = true;
       // Drive the whole entrance off an accumulated 0→1 timeline (frame-pacing-
       // proof: a throttled rAF can't stall it). Height + flair + burst all key off
       // `p` and the locked drop style.
@@ -599,7 +617,9 @@ export function Avatar() {
     // Damp a FOCUS point toward (avatar + lead). Track the avatar TIGHTLY (high
     // lambda) so the camera doesn't lag behind at speed, while the yaw eases
     // gently above — together that reads as a smooth follow, not "fast + laggy".
-    const camBaseY = dropping.current ? avatarPos.y : terrainHeight(avatarPos.x, avatarPos.z);
+    // Always frame the GROUND (not the falling avatar's high Y) so the camera
+    // holds steady on the spawn while the avatar drops INTO view from above.
+    const camBaseY = terrainHeight(avatarPos.x, avatarPos.z);
     const goalX = avatarPos.x + leadX.current;
     const goalZ = avatarPos.z + leadZ.current;
     if (!focus.current) focus.current = { x: goalX, y: camBaseY, z: goalZ };

@@ -4,7 +4,7 @@
  *   • ContextHint: a small bar that changes with what you're doing — move when you
  *     land, "uncover"/"dig" when you're standing by a marker.
  */
-import React from "react";
+import React, { useState } from "react";
 import { useGame, dismissWelcome } from "./gameStore";
 import { card, primaryBtn, glass, SUBINK } from "./uiKit";
 
@@ -18,7 +18,19 @@ const wrap = {
 
 export function WelcomeCard() {
   const { playing, welcomeSeen } = useGame();
-  if (!playing || welcomeSeen) return null;
+  const [leaving, setLeaving] = useState(false);
+  if (!playing) return null;
+  if (welcomeSeen && !leaving) return null;
+
+  // On "Start exploring": begin the fade-out AND dismiss (welcomeSeen → the avatar
+  // drops in now), so the card disappears as the character drops. Unmount after.
+  const start = () => {
+    if (leaving) return;
+    setLeaving(true);
+    dismissWelcome();
+    setTimeout(() => setLeaving(false), 460);
+  };
+
   return (
     <div
       style={{
@@ -31,18 +43,22 @@ export function WelcomeCard() {
         // anchor the card LOW and keep the scrim light so your character (who
         // drops in centre-screen) stays visible instead of hidden behind the card
         paddingBottom: "8vh",
-        background: "rgba(20,12,8,0.14)",
+        background: leaving ? "rgba(20,12,8,0)" : "rgba(20,12,8,0.14)",
         pointerEvents: "none",
+        transition: "background 0.42s ease",
       }}
     >
       <div
         style={{
           ...card,
-          pointerEvents: "auto",
+          pointerEvents: leaving ? "none" : "auto",
           maxWidth: 320,
           width: "82%",
           padding: "16px 20px 18px",
           textAlign: "center",
+          opacity: leaving ? 0 : 1,
+          transform: leaving ? "translateY(14px) scale(0.96)" : "translateY(0) scale(1)",
+          transition: "opacity 0.42s ease, transform 0.42s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
         <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, color: "#3A2A20", marginBottom: 5 }}>
@@ -64,7 +80,7 @@ export function WelcomeCard() {
           <b>Move</b> arrows &nbsp;·&nbsp; <b>Look</b> drag &nbsp;·&nbsp; <b>Zoom</b> scroll
         </div>
         <button
-          onClick={dismissWelcome}
+          onClick={start}
           style={{
             ...primaryBtn,
             marginTop: 13,
