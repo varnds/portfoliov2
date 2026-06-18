@@ -39,39 +39,38 @@ export function WelcomeCard() {
         style={{
           ...card,
           pointerEvents: "auto",
-          maxWidth: 440,
-          width: "86%",
-          padding: "26px 32px",
+          maxWidth: 320,
+          width: "82%",
+          padding: "16px 20px 18px",
           textAlign: "center",
         }}
       >
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, color: "#3A2A20", marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, color: "#3A2A20", marginBottom: 5 }}>
           Someone lives here.
         </div>
-        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, lineHeight: 1.6, color: "#5A463A" }}>
-          Wander and piece together who they are — follow the glowing markers, and
-          dig where the earth is turned.
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.5, color: "#5A463A" }}>
+          Wander and piece together who they are — follow the markers, dig where the
+          earth is turned.
         </div>
         <div
           style={{
-            margin: "16px 0 4px",
-            fontSize: 12,
-            letterSpacing: 1,
+            margin: "11px 0 0",
+            fontSize: 10.5,
+            letterSpacing: 0.5,
             color: "#8A7256",
-            lineHeight: 1.8,
+            lineHeight: 1.7,
           }}
         >
-          <b>Move</b> arrow keys &nbsp;·&nbsp; <b>Look</b> drag<br />
-          <b>Zoom</b> scroll &nbsp;·&nbsp; <b>Uncover</b> click the marker
+          <b>Move</b> arrows &nbsp;·&nbsp; <b>Look</b> drag &nbsp;·&nbsp; <b>Zoom</b> scroll
         </div>
         <button
           onClick={dismissWelcome}
           style={{
             ...primaryBtn,
-            marginTop: 18,
-            fontSize: 12,
-            letterSpacing: 2,
-            padding: "10px 22px",
+            marginTop: 13,
+            fontSize: 11,
+            letterSpacing: 1.5,
+            padding: "8px 18px",
           }}
         >
           Start exploring
