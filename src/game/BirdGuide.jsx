@@ -34,9 +34,10 @@ const CREAM = "rgba(255,253,247,0.94)";
 const LEAD = 3.0; // world units ahead, toward the objective
 const GUIDE_H = 2.7; // hover height above the ground at the lead spot
 
-// On a new objective the bird reaches further ahead to show the way, then settles.
-const POINT_REACH = 4.2; // world units toward the target during the point beat
-const POINT_DUR = 1.3; // seconds of the point beat
+// On a new objective the bird does a QUICK, SNAPPY twist IN PLACE (no forward
+// dart) — it stays at its normal lead spot and just spins to celebrate.
+const FLOURISH_DUR = 0.45; // seconds of the in-place celebratory spin
+const POINT_DUR = 0.45; // seconds the bird looks toward the new objective
 
 // Reusable scratch (no per-frame allocations).
 const _goal = new THREE.Vector3();
@@ -140,8 +141,8 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const wingR = useRef();
   const posRef = useRef(null); // current flown position (smoothed)
   const lastPhase = useRef(phase); // detect a new objective → point-dart + flourish
-  const flourish = useRef(0); // seconds left of an excited spin+hop on a new leg
-  const point = useRef(0); // seconds left of the "dart toward target then return"
+  const flourish = useRef(0); // seconds left of an excited in-place spin+hop on a new leg
+  const point = useRef(0); // seconds left of "look toward the new objective" (no translation)
   const wasActive = useRef(false); // detect the spawn (avatarActive rising edge)
   const greet = useRef(0); // seconds left of the "hello, right beside you" beat at spawn
 
@@ -214,28 +215,31 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     const tux = tdx / tdist;
     const tuz = tdz / tdist;
 
-    // ── On a NEW objective: dart toward the target to point the way, then return ─
+    // ── On a NEW objective: a QUICK, SNAPPY twist IN PLACE (no forward dart) ──────
     if (lastPhase.current !== phase) {
       lastPhase.current = phase;
-      flourish.current = 1.2; // excited little spin + hop
-      point.current = POINT_DUR; // dart toward the goal, then drift back behind you
+      flourish.current = FLOURISH_DUR; // quick in-place spin + tiny hop
+      point.current = POINT_DUR; // briefly look toward the goal (no translation)
     }
     flourish.current = Math.max(0, flourish.current - d);
     point.current = Math.max(0, point.current - d);
-    const fl = flourish.current > 0 ? flourish.current / 1.2 : 0; // 1→0 over the flourish
-    // Point amount eases 0→1→0 (out toward target and back) over POINT_DUR.
+    // Snappy ease-out: a single spin that's fast up front and settles. `fl` runs 1→0.
+    const fl = flourish.current > 0 ? flourish.current / FLOURISH_DUR : 0;
+    // `spin` is 0→1 with an ease-out so the twirl is crisp, not constant-speed.
+    const spin = fl > 0 ? 1 - fl * fl : 0; // ease-out quad, 0→1 over the flourish
+    // Point amount eases 0→1→0 — only used to face the objective, never to move.
     const pt = point.current > 0 ? Math.sin((1 - point.current / POINT_DUR) * Math.PI) : 0;
 
     // ── The bird GUIDES: it flies out AHEAD of the player toward the current
     // objective, leading the way — capped so it never overshoots the target (once
-    // you arrive it hovers over the spot). On a new objective it reaches a little
-    // further ahead (the point beat) to clearly show the direction.
+    // you arrive it hovers over the spot). The new-objective twist happens IN PLACE
+    // (a quick spin), so it adds NO translation — the bird stays at its lead spot.
     let baseX, baseZ;
     if (celebrate) {
       baseX = target.x;
       baseZ = target.z;
     } else {
-      const reach = Math.min(LEAD + (POINT_REACH - LEAD) * pt, tdist);
+      const reach = Math.min(LEAD, tdist);
       const leadX = a.x + tux * reach;
       const leadZ = a.z + tuz * reach;
       if (greeting > 0) {
@@ -260,7 +264,8 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     const circleSpd = celebrate ? 2.6 : 1.3;
     // Livelier bob (two frequencies) + a single up-hop during the flourish.
     const bob = Math.sin(t * 2.4) * 0.14 + Math.sin(t * 5.0) * 0.05;
-    const hop = fl > 0 ? Math.sin((1 - fl) * Math.PI) * 0.45 : 0;
+    // A small, subtle up-hop synced to the quick twist (kept ≤0.3 so it stays put).
+    const hop = fl > 0 ? Math.sin(spin * Math.PI) * 0.26 : 0;
     _goal.set(
       baseX + Math.cos(t * circleSpd) * circleR,
       baseY + hoverY + bob + hop,
@@ -270,8 +275,8 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     if (!posRef.current) posRef.current = _goal.clone();
     const pos = posRef.current;
     _prev.copy(pos);
-    // Ease toward the goal — smooth follow, a touch snappier during the point-dart.
-    const k = Math.min(1, d * (celebrate ? 2.6 : pt > 0.05 ? 3.4 : 2.2));
+    // Ease toward the goal — smooth lead-follow as the player walks.
+    const k = Math.min(1, d * (celebrate ? 2.6 : 2.2));
     pos.lerp(_goal, k);
     g.position.copy(pos);
 
@@ -287,8 +292,9 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     } else if (speed > 1e-4) {
       faceYaw = Math.atan2(-hZ, hX); // otherwise look where the player is heading
     }
-    // A happy full twirl at the start of each leg (one spin over the flourish).
-    g.rotation.y = faceYaw + (fl > 0 ? (1 - fl) * Math.PI * 2 : 0);
+    // A quick, snappy single twirl IN PLACE at the start of each leg — eased out
+    // (fast then settling) over the short FLOURISH_DUR, adding no translation.
+    g.rotation.y = faceYaw + spin * Math.PI * 2;
     // Lively banking roll, tipped harder during the flourish + celebration.
     g.rotation.z = Math.sin(t * 1.3) * 0.2 + fl * 0.5 + (celebrate ? 0.35 : 0);
 

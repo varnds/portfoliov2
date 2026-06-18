@@ -923,9 +923,9 @@ export function WashDay() {
     if (phase === "seek" && nearPanel)
       return { pos: [SEEK_POS.x, SEEK_POS.y + 1.3, SEEK_POS.z], k: "G", verb: "grab the denim", hold: false, action: pickUpJacket };
     if (phase === "carryDirty" && nearWasher)
-      return { pos: [WASHER_POS.x, WASHER_POS.y + 2.7, WASHER_POS.z], k: "L", verb: "load the washer", hold: false, action: startWashing };
+      return { pos: [WASHER_POS.x + 0.7, WASHER_POS.y + 1.5, WASHER_POS.z], k: "L", verb: "load the washer", hold: false, action: startWashing };
     if (phase === "washing")
-      return { pos: [WASHER_POS.x, WASHER_POS.y + 2.7, WASHER_POS.z], k: "S", verb: "spin", hold: true };
+      return { pos: [WASHER_POS.x + 0.7, WASHER_POS.y + 1.5, WASHER_POS.z], k: "S", verb: "spin", hold: true };
     if (phase === "carryWet" && nearPeg)
       return { pos: [PEG_POS.x, PEG_POS.y + 0.8, PEG_POS.z], k: "H", verb: "hang it up", hold: false, action: startDrying };
     if (phase === "drying")
@@ -962,12 +962,12 @@ export function WashDay() {
       {/* stray sock to find on the walk */}
       <StraySock visible={!sockFound} />
       {sockToast && (
-        <Html position={[SOCK_POS.x, SOCK_POS.y + 1.1, SOCK_POS.z]} center distanceFactor={11} zIndexRange={[60, 0]} style={{ pointerEvents: "none" }}>
+        <Html position={[SOCK_POS.x, SOCK_POS.y + 1.1, SOCK_POS.z]} center distanceFactor={6} zIndexRange={[60, 0]} style={{ pointerEvents: "none" }}>
           <div style={{
             background: "rgba(255,253,247,0.95)", color: "#3A2A20",
             border: "1.5px solid #E2725B", borderRadius: 999,
-            padding: "5px 12px", whiteSpace: "nowrap",
-            fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600,
+            padding: "4px 10px", whiteSpace: "nowrap",
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
             boxShadow: "0 6px 18px rgba(58,42,32,0.25)",
           }}>🧦 found a stray sock!</div>
         </Html>
