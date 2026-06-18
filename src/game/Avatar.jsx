@@ -20,6 +20,7 @@ import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
+import { DropBurst, ParachuteCanopy } from "./DropEffects";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
@@ -32,6 +33,36 @@ const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
 const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is visible without rotating
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
+
+// ── Entrance "drop" styles (selectable). Each is a quick, frame-pacing-proof 0→1
+// timeline. DUR = seconds; FALL(p) = how far the body has fallen (0 = up at the
+// spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
+// (burst fires); KIND = the burst flavour. The squash/scale flair lives in
+// AvatarModel and is applied to an INNER group so it never touches rig.scale.
+const DROP_DUR = { bounce: 0.85, parachute: 1.25, comet: 0.65, pop: 0.45 };
+const DROP_IMPACT = { bounce: 0.55, comet: 0.5, parachute: 0.97, pop: 0.02 };
+function dropFall(p, style) {
+  if (style === "pop") return 1; // no fall — already on the ground, just pops in
+  if (style === "comet") {
+    if (p >= 0.5) return 1;
+    const f = p / 0.5;
+    return f * f * f; // very steep plunge
+  }
+  if (style === "parachute") return 1 - Math.pow(1 - Math.min(1, p), 1.8); // gentle, ease-out
+  // bounce: plunge to the ground by 0.55, then a damped hop that settles
+  if (p < 0.55) {
+    const f = p / 0.55;
+    return f * f;
+  }
+  const r = (p - 0.55) / 0.45;
+  return 1 - Math.max(0, Math.sin(r * Math.PI)) * 0.16 * Math.exp(-r * 2.2);
+}
+function easeOutBack(p) {
+  const c1 = 1.70158 * 1.2;
+  const c3 = c1 + 1;
+  const t = p - 1;
+  return 1 + c3 * t * t * t + c1 * t * t;
+}
 
 // Critically-damped spring toward a target ANGLE (shortest path). Unlike an
 // exponential lerp — which is fastest the instant the target jumps and then
@@ -73,6 +104,7 @@ function pickClip(names, includes, excludes = []) {
  */
 function AvatarModel({ cfg, motion }) {
   const rigRef = useRef();
+  const flairRef = useRef(); // inner group: drop-in squash/stretch/pop (NEVER rig.scale)
   const { scene, animations } = useGLTF(cfg.url);
   const { actions, names } = useAnimations(animations, rigRef);
   const curAction = useRef(null);
@@ -142,7 +174,44 @@ function AvatarModel({ cfg, motion }) {
 
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.05);
-    const { moving, running, jumping, speed } = motion.current;
+    const { moving, running, jumping, speed, drop, dropStyle } = motion.current;
+
+    // ── DROP-IN flair on the INNER group (composes with rig.scale via multiply, so
+    // it can never resize the avatar). Per style: pop scales up with overshoot;
+    // bounce/comet stretch on the way down then squash & ring back on impact;
+    // parachute just sways. Cleared to identity once the drop is done.
+    const f = flairRef.current;
+    if (f) {
+      if (drop > 0 && drop < 1) {
+        if (dropStyle === "pop") {
+          const s = Math.max(0.001, easeOutBack(drop));
+          f.scale.set(s, s, s);
+          f.rotation.set(0, 0, 0);
+        } else if (dropStyle === "parachute") {
+          f.scale.set(1, 1, 1);
+          f.rotation.set(0, 0, Math.sin(state.clock.elapsedTime * 2.1) * 0.12);
+        } else {
+          // bounce / comet: stretch tall in the plunge, squash wide on impact,
+          // then a damped ring back to 1 (volume-preserving sx = 1/√sy).
+          const split = dropStyle === "comet" ? 0.5 : 0.55;
+          let sy;
+          if (drop < split) {
+            const q = drop / split;
+            sy = 1 + (dropStyle === "comet" ? 0.55 : 0.42) * Math.sin(q * Math.PI * 0.5);
+          } else {
+            const r = (drop - split) / (1 - split);
+            const ring = Math.cos(r * Math.PI * 2.3) * Math.exp(-r * (dropStyle === "comet" ? 5 : 4.5));
+            sy = 1 - 0.42 * ring;
+          }
+          const sx = 1 / Math.sqrt(Math.max(0.2, sy));
+          f.scale.set(sx, sy, sx);
+          f.rotation.set(0, 0, 0);
+        }
+      } else if (f.scale.x !== 1 || f.scale.y !== 1 || f.rotation.z !== 0) {
+        f.scale.set(1, 1, 1);
+        f.rotation.set(0, 0, 0);
+      }
+    }
 
     if (hasClips && actions) {
       let want;
@@ -194,7 +263,9 @@ function AvatarModel({ cfg, motion }) {
 
   return (
     <group ref={rigRef} scale={rig.scale}>
-      <primitive object={rig.obj} />
+      <group ref={flairRef}>
+        <primitive object={rig.obj} />
+      </group>
     </group>
   );
 }
@@ -204,10 +275,17 @@ export function Avatar() {
   const ref = useRef();
   const keys = useRef({});
   const dropping = useRef(true);
+  const dropT = useRef(0); // 0→1 elapsed-time progress of the entrance
+  const dropStyleRef = useRef("bounce"); // locked at spawn so it can't change mid-drop
+  const burstFired = useRef(false); // impact dust/sparkle fired once
+  const poofSeq = useRef(0); // bump → DropBurst fires
+  const poofKind = useRef("dust"); // "dust" | "sparkle"
+  const canopyRef = useRef(0); // 0→1 parachute-canopy scale/opacity
+  const shakeRef = useRef(0); // comet impact camera shake amount
   const guideTimer = useRef(0);
   const jumping = useRef(false);
   const jumpT = useRef(0);
-  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0 });
+  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0, drop: 0, dropStyle: "bounce" });
   const tmpFwd = useRef(new THREE.Vector3());
   const tmpRight = useRef(new THREE.Vector3());
   const tmpMove = useRef(new THREE.Vector3());
@@ -233,7 +311,7 @@ export function Avatar() {
   const idle = useRef(0); // seconds since last movement
   const deathT = useRef(0); // seconds into the death topple (0 = alive)
 
-  const { playing, avatarVariant, cameraMode, cameraDist } = useGame();
+  const { playing, avatarVariant, cameraMode, cameraDist, dropStyle } = useGame();
   const cfg = AVATAR_BY_ID[avatarVariant] || AVATAR_BY_ID[DEFAULT_AVATAR];
 
   // Near / Far framing preset → snap the camera distance target (scroll can still
@@ -246,6 +324,14 @@ export function Avatar() {
     if (!playing) return;
     avatarPos.copy(SPAWN);
     dropping.current = true;
+    // lock the entrance style for this run + reset its timeline/effects
+    dropStyleRef.current = dropStyle;
+    motion.current.dropStyle = dropStyle;
+    motion.current.drop = 0;
+    dropT.current = 0;
+    burstFired.current = false;
+    canopyRef.current = 0;
+    shakeRef.current = 0;
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
     yawVel.current = 0; // clear follow-spring momentum
@@ -346,10 +432,35 @@ export function Avatar() {
     }
 
     if (dropping.current) {
-      avatarPos.y += (groundY - avatarPos.y) * Math.min(1, d * 3.2);
-      if (avatarPos.y <= groundY + 0.06) {
+      // Drive the whole entrance off an accumulated 0→1 timeline (frame-pacing-
+      // proof: a throttled rAF can't stall it). Height + flair + burst all key off
+      // `p` and the locked drop style.
+      const style = dropStyleRef.current;
+      dropT.current = Math.min(1, dropT.current + d / (DROP_DUR[style] || 0.85));
+      const p = dropT.current;
+      const top = SPAWN.y;
+      avatarPos.y = top + (groundY - top) * dropFall(p, style);
+      motion.current.drop = p;
+      // parachute canopy: fade in, hold, fade out near touchdown
+      let cy = 0;
+      if (style === "parachute") {
+        if (p < 0.1) cy = p / 0.1;
+        else if (p > 0.88) cy = Math.max(0, 1 - (p - 0.88) / 0.12);
+        else cy = 1;
+      }
+      canopyRef.current = cy;
+      // fire the impact burst once, at the style's arrival moment
+      if (!burstFired.current && p >= (DROP_IMPACT[style] || 1)) {
+        burstFired.current = true;
+        poofKind.current = style === "bounce" || style === "comet" ? "dust" : "sparkle";
+        poofSeq.current += 1;
+        if (style === "comet") shakeRef.current = 0.5;
+      }
+      if (p >= 1) {
         avatarPos.y = groundY;
         dropping.current = false;
+        motion.current.drop = 1;
+        canopyRef.current = 0;
         setLanded(true);
       }
     } else {
@@ -497,6 +608,14 @@ export function Avatar() {
       f.y + Math.sin(cp) * r + 1.0,
       f.z + Math.cos(yaw.current) * Math.cos(cp) * r,
     );
+    // Comet-impact camera shake — a quick decaying jitter.
+    if (shakeRef.current > 0.001) {
+      shakeRef.current = Math.max(0, shakeRef.current - d * 2.4);
+      const amp = shakeRef.current * 0.4;
+      camera.position.x += (Math.random() - 0.5) * amp;
+      camera.position.y += (Math.random() - 0.5) * amp;
+      camera.position.z += (Math.random() - 0.5) * amp;
+    }
     camera.lookAt(tmpTarget.current.set(f.x, f.y + 1.1, f.z));
 
     guideTimer.current += d;
@@ -508,10 +627,16 @@ export function Avatar() {
 
   if (!playing) return null;
   return (
-    <group ref={ref}>
-      <Suspense fallback={null}>
-        <AvatarModel key={avatarVariant} cfg={cfg} motion={motion} />
-      </Suspense>
-    </group>
+    <>
+      <group ref={ref}>
+        <Suspense fallback={null}>
+          <AvatarModel key={avatarVariant} cfg={cfg} motion={motion} />
+        </Suspense>
+      </group>
+      {/* entrance flourishes — SIBLINGS (they place themselves in world space from
+          avatarPos, so they must NOT be inside the moved `ref` group) */}
+      <DropBurst seqRef={poofSeq} kindRef={poofKind} />
+      <ParachuteCanopy canopyRef={canopyRef} />
+    </>
   );
 }

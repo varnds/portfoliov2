@@ -63,6 +63,7 @@ import { RevealCard } from "./game/RevealCard";
 import { WelcomeCard, ContextHint } from "./game/PlayHints";
 import { AvatarSwitcher } from "./game/AvatarSwitcher";
 import { CameraSwitcher } from "./game/CameraSwitcher";
+import { DropSwitcher } from "./game/DropSwitcher";
 import { ChaseHud } from "./game/ChaseHud";
 import { FinaleGallery } from "./game/FinaleGallery";
 import { ModeSelector } from "./game/ModeSelector";
@@ -3404,6 +3405,7 @@ export default function App() {
               <PlayButton visible />
               <ModeSelector visible />
               <CameraSwitcher visible />
+              <DropSwitcher visible />
               <AvatarSwitcher visible />
             </div>
           )}

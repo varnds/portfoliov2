@@ -136,6 +136,7 @@ let state = {
   avatarVariant: DEFAULT_AVATAR, // one of the ids in avatarConfig AVATARS
   cameraMode: "track", // "track" (fixed angle, glide) | "follow" (eases behind heading) | "free" (manual orbit)
   cameraDist: "near", // "near" | "far" — framing distance preset
+  dropStyle: "bounce", // entrance: "bounce" | "parachute" | "comet" | "pop"
 };
 
 const listeners = new Set();
@@ -213,6 +214,12 @@ export function setCameraMode(m) {
 export function setCameraDist(d) {
   if (state.cameraDist === d) return;
   state = { ...state, cameraDist: d };
+  emit();
+}
+
+export function setDropStyle(s) {
+  if (state.dropStyle === s) return;
+  state = { ...state, dropStyle: s };
   emit();
 }
 
