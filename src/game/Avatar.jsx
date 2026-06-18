@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
-import { DropBurst, ParachuteCanopy } from "./DropEffects";
+import { DropBurst, ParachuteCanopy, CometStreak } from "./DropEffects";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
@@ -39,23 +39,25 @@ const JUMP_H = 1.7;
 // spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
 // (burst fires); KIND = the burst flavour. The squash/scale flair lives in
 // AvatarModel and is applied to an INNER group so it never touches rig.scale.
-const DROP_DUR = { bounce: 0.85, parachute: 1.25, comet: 0.65, pop: 0.45 };
-const DROP_IMPACT = { bounce: 0.55, comet: 0.5, parachute: 0.97, pop: 0.02 };
+const DROP_DUR = { bounce: 1.35, parachute: 1.6, comet: 1.15, pop: 0.6 };
+const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
 function dropFall(p, style) {
   if (style === "pop") return 1; // no fall — already on the ground, just pops in
   if (style === "comet") {
-    if (p >= 0.5) return 1;
-    const f = p / 0.5;
-    return f * f * f; // very steep plunge
+    // ONE steep accelerating plunge to the ground by 0.6, then it stays (a crash,
+    // no bounce). The longer fall lets the streak read on the way down.
+    if (p >= 0.6) return 1;
+    const f = p / 0.6;
+    return f * f * f;
   }
   if (style === "parachute") return 1 - Math.pow(1 - Math.min(1, p), 1.8); // gentle, ease-out
-  // bounce: plunge to the ground by 0.55, then a damped hop that settles
-  if (p < 0.55) {
-    const f = p / 0.55;
+  // bounce: a quick plunge, then 2–3 DECAYING bounces that settle (a rubber ball).
+  if (p < 0.4) {
+    const f = p / 0.4;
     return f * f;
   }
-  const r = (p - 0.55) / 0.45;
-  return 1 - Math.max(0, Math.sin(r * Math.PI)) * 0.16 * Math.exp(-r * 2.2);
+  const r = (p - 0.4) / 0.6; // 0→1 over the bouncing
+  return 1 - Math.abs(Math.sin(r * Math.PI * 2.5)) * 0.3 * Math.exp(-r * 2.6);
 }
 function easeOutBack(p) {
   const c1 = 1.70158 * 1.2;
@@ -190,18 +192,29 @@ function AvatarModel({ cfg, motion }) {
         } else if (dropStyle === "parachute") {
           f.scale.set(1, 1, 1);
           f.rotation.set(0, 0, Math.sin(state.clock.elapsedTime * 2.1) * 0.12);
-        } else {
-          // bounce / comet: stretch tall in the plunge, squash wide on impact,
-          // then a damped ring back to 1 (volume-preserving sx = 1/√sy).
-          const split = dropStyle === "comet" ? 0.5 : 0.55;
+        } else if (dropStyle === "comet") {
+          // big STRETCH down the long plunge, then a single hard SQUASH that rings
+          // out (it crashes and stays).
           let sy;
-          if (drop < split) {
-            const q = drop / split;
-            sy = 1 + (dropStyle === "comet" ? 0.55 : 0.42) * Math.sin(q * Math.PI * 0.5);
+          if (drop < 0.6) {
+            sy = 1 + 0.75 * Math.sin((drop / 0.6) * Math.PI * 0.5);
           } else {
-            const r = (drop - split) / (1 - split);
-            const ring = Math.cos(r * Math.PI * 2.3) * Math.exp(-r * (dropStyle === "comet" ? 5 : 4.5));
-            sy = 1 - 0.42 * ring;
+            const r = (drop - 0.6) / 0.4;
+            sy = 1 - 0.5 * Math.cos(r * Math.PI * 2.1) * Math.exp(-r * 5);
+          }
+          const sx = 1 / Math.sqrt(Math.max(0.2, sy));
+          f.scale.set(sx, sy, sx);
+          f.rotation.set(0, 0, 0);
+        } else {
+          // bounce: a modest stretch on the way down, then the squash OSCILLATES
+          // in sync with the decaying bounces (springy rubber ball).
+          let sy;
+          if (drop < 0.4) {
+            sy = 1 + 0.3 * Math.sin((drop / 0.4) * Math.PI * 0.5);
+          } else {
+            const r = (drop - 0.4) / 0.6;
+            // negative cos → squash at each ground contact, stretch at each apex
+            sy = 1 - 0.34 * Math.cos(r * Math.PI * 2.5) * Math.exp(-r * 2.6);
           }
           const sx = 1 / Math.sqrt(Math.max(0.2, sy));
           f.scale.set(sx, sy, sx);
@@ -281,6 +294,7 @@ export function Avatar() {
   const poofSeq = useRef(0); // bump → DropBurst fires
   const poofKind = useRef("dust"); // "dust" | "sparkle"
   const canopyRef = useRef(0); // 0→1 parachute-canopy scale/opacity
+  const streakRef = useRef(0); // 0→1 comet streak visibility
   const shakeRef = useRef(0); // comet impact camera shake amount
   const guideTimer = useRef(0);
   const jumping = useRef(false);
@@ -331,6 +345,7 @@ export function Avatar() {
     dropT.current = 0;
     burstFired.current = false;
     canopyRef.current = 0;
+    streakRef.current = 0;
     shakeRef.current = 0;
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
@@ -449,12 +464,14 @@ export function Avatar() {
         else cy = 1;
       }
       canopyRef.current = cy;
+      // comet streak: a stretched trail above the avatar during the plunge.
+      streakRef.current = style === "comet" && p < 0.6 ? Math.min(1, p * 5) : 0;
       // fire the impact burst once, at the style's arrival moment
       if (!burstFired.current && p >= (DROP_IMPACT[style] || 1)) {
         burstFired.current = true;
-        poofKind.current = style === "bounce" || style === "comet" ? "dust" : "sparkle";
+        poofKind.current = style === "comet" ? "blast" : style === "bounce" ? "dust" : "sparkle";
         poofSeq.current += 1;
-        if (style === "comet") shakeRef.current = 0.5;
+        if (style === "comet") shakeRef.current = 0.85; // bigger crash
       }
       if (p >= 1) {
         avatarPos.y = groundY;
@@ -637,6 +654,7 @@ export function Avatar() {
           avatarPos, so they must NOT be inside the moved `ref` group) */}
       <DropBurst seqRef={poofSeq} kindRef={poofKind} />
       <ParachuteCanopy canopyRef={canopyRef} />
+      <CometStreak streakRef={streakRef} />
     </>
   );
 }
