@@ -21,6 +21,7 @@ import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { WASH_BEATS } from "./washStory";
 import { avatarPos, avatarActive, useGame } from "./gameStore";
+import { sfx } from "./audio";
 import { terrainHeight } from "../scene3d/coords";
 import { OrangeBirdShape } from "../scene3d/birdShape";
 
@@ -180,6 +181,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
       wasActive.current = true;
       greet.current = 1.6;
       posRef.current = null; // re-place beside the player, don't fly in from afar
+      sfx.birdChirp(); // a little hello when it appears beside you
     }
     greet.current = Math.max(0, greet.current - d);
     const greeting = greet.current > 0 ? greet.current / 1.6 : 0; // 1→0
@@ -220,6 +222,7 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
       lastPhase.current = phase;
       flourish.current = FLOURISH_DUR; // quick in-place spin + tiny hop
       point.current = POINT_DUR; // briefly look toward the goal (no translation)
+      sfx.birdChirp(); // chirps as it points you to the next thing
     }
     flourish.current = Math.max(0, flourish.current - d);
     point.current = Math.max(0, point.current - d);

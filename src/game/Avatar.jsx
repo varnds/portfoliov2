@@ -18,6 +18,7 @@ import { useGLTF, useAnimations } from "@react-three/drei";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
+import { sfx } from "./audio";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
 import { GlowRing, Beam, VoxelBits } from "./DropEffects";
@@ -259,6 +260,7 @@ export function Avatar() {
   const ref = useRef();
   const keys = useRef({});
   const dropping = useRef(true);
+  const dropSoundFired = useRef(false); // spawn SFX plays once per entrance
   const dropT = useRef(0); // 0→1 elapsed-time progress of the entrance
   const dropStyleRef = useRef("materialize"); // locked at spawn so it can't change mid-drop
   const ringRef = useRef(0); // materialize: 1→0 expanding glow ring
@@ -316,6 +318,7 @@ export function Avatar() {
     motion.current.dropStyle = dropStyle;
     motion.current.drop = 0;
     dropT.current = 0;
+    dropSoundFired.current = false;
     ringRef.current = 0;
     beamRef.current = 0;
     bitsRef.current = 0;
@@ -439,6 +442,10 @@ export function Avatar() {
       // proof: a throttled rAF can't stall it). Height + flair + burst all key off
       // `p` and the locked drop style.
       const style = dropStyleRef.current;
+      if (!dropSoundFired.current) {
+        dropSoundFired.current = true;
+        sfx.drop(style); // a spawn sound matched to the chosen entrance
+      }
       dropT.current = Math.min(1, dropT.current + d / (DROP_DUR[style] || 0.85));
       const p = dropT.current;
       const top = groundY + (DROP_START_Y[style] ?? 0);

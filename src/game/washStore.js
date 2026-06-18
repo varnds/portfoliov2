@@ -21,6 +21,7 @@
  *     the progress bars, and the final About reveal.
  */
 import { useSyncExternalStore } from "react";
+import { sfx } from "./audio";
 
 export const WASH_TIME = 4.0; // seconds of holding to finish a wash
 export const DRY_TIME = 5.0; // seconds of holding to finish drying
@@ -55,6 +56,7 @@ export function pickUpJacket() {
   if (s.phase !== "seek") return;
   s = { ...s, phase: "carryDirty" };
   emit();
+  sfx.pickup();
 }
 export function setNearPanel(v) {
   if (s.nearPanel === !!v) return;
@@ -75,11 +77,13 @@ export function startWashing() {
   if (s.phase !== "carryDirty") return;
   s = { ...s, phase: "washing", holding: false };
   emit();
+  sfx.load();
 }
 export function startDrying() {
   if (s.phase !== "carryWet") return;
   s = { ...s, phase: "drying", holding: false };
   emit();
+  sfx.hang();
 }
 export function setHolding(v) {
   if (s.holding === !!v) return;

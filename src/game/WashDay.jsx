@@ -49,6 +49,13 @@ import {
   DRY_TIME,
 } from "./washStore";
 import { BirdGuide } from "./BirdGuide";
+import {
+  sfx,
+  audioWasherStart,
+  audioWasherStop,
+  audioWasherIntensity,
+  audioMusicIntensity,
+} from "./audio";
 
 // ── World anchors ─────────────────────────────────────────────────────────────
 const LEFT_POST = postLayout(70, 470, 130, 0);
@@ -454,6 +461,9 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
   // eased "agitation" 0..1 — ramps up while holding, settles when released, so the
   // spin and shake feel like they spin up/down rather than snapping
   const spin = useRef(0);
+  const wasWashing = useRef(false); // edge-detect to start/stop the washer sound
+  // stop the washer loop if the machine ever unmounts mid-wash
+  useEffect(() => () => audioWasherStop(), []);
   const sudsState = useMemo(
     () =>
       Array.from({ length: SUDS_COUNT }, (_, i) => ({
@@ -473,6 +483,21 @@ function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
     const target = washing && holding ? 1 : 0;
     spin.current += (target - spin.current) * Math.min(1, dt * (target > spin.current ? 4 : 2.5));
     const ag = spin.current; // 0..1 aggressive-spin factor
+
+    // washer running SOUND + a gentle music swell, tied to the agitation.
+    if (washing && !wasWashing.current) {
+      wasWashing.current = true;
+      audioWasherStart();
+    } else if (!washing && wasWashing.current) {
+      wasWashing.current = false;
+      audioWasherStop();
+      audioMusicIntensity(0);
+    }
+    if (washing) {
+      audioWasherIntensity(0.25 + ag * 0.75);
+      audioMusicIntensity(ag);
+    }
+
     // liveliness scales with washP and surges hard while holding (driven by `ag`)
     const live = washing ? (0.2 + washP * 0.5) * (0.4 + ag * 0.9) : 0;
 
@@ -891,6 +916,7 @@ export function WashDay() {
       if (ds < 1.6) {
         sockFoundRef.current = true;
         setSockFound(true);
+        sfx.sockFound();
       }
     }
 
