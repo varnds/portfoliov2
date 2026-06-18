@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
-import { ParachuteCanopy, CometStreak } from "./DropEffects";
+import { GlowRing, Beam, VoxelBits } from "./DropEffects";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
@@ -34,40 +34,20 @@ const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is vi
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
-// ── Entrance "drop" styles (selectable). Each is a quick, frame-pacing-proof 0→1
-// timeline. DUR = seconds; FALL(p) = how far the body has fallen (0 = up at the
-// spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
-// (burst fires); KIND = the burst flavour. The squash/scale flair lives in
-// AvatarModel and is applied to an INNER group so it never touches rig.scale.
-const DROP_DUR = { bounce: 0.95, parachute: 1.7, comet: 2.3, pop: 0.55 };
-// Start the fall LOW enough that the avatar is in the (ground-framed) shot for the
-// whole descent, so you actually see the entrance instead of it happening above
-// the top edge. Parachute starts lowest (a gentle in-frame float); pop doesn't fall.
-const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 11, pop: 2.6 };
-const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
+// ── Entrance "spawn" styles (selectable, frame-pacing-proof 0→1 timeline). Most
+// appear ON THE SPOT (no fall) with an effect; "settle" is a soft short fall. The
+// season ground dust on spawn is emitted by FootstepEffects on the active edge.
+const DROP_DUR = { materialize: 0.75, voxel: 0.95, beam: 1.0, settle: 0.9 };
+// Height the body starts above the ground. On-the-spot spawns are 0; settle falls.
+const DROP_START_Y = { materialize: 0, voxel: 0, beam: 0, settle: 5 };
 function dropFall(p, style) {
-  if (style === "pop") return Math.min(1, p / 0.72); // a quick little drop so it lands (season puff)
-  if (style === "comet") {
-    // ONE gentle accelerating descent to the ground by 0.6, then it settles (a
-    // slow shooting-star arrival, not a crash). The long fall lets the streak read.
-    if (p >= 0.6) return 1;
-    const f = p / 0.6;
-    return f * f; // ease-in, but softer than a cube
-  }
-  if (style === "parachute") return 1 - Math.pow(1 - Math.min(1, p), 1.8); // gentle, ease-out
-  // bounce: a quick plunge, then ONE clean rebound that settles.
-  if (p < 0.42) {
-    const f = p / 0.42;
-    return f * f;
-  }
-  const r = (p - 0.42) / 0.58;
-  return 1 - Math.max(0, Math.sin(r * Math.PI)) * 0.22 * Math.exp(-r * 1.6);
+  if (style === "settle") return 1 - Math.pow(1 - Math.min(1, p), 3); // soft ease-out landing
+  return 1; // materialize / voxel / beam don't fall — they appear on the ground
 }
-function easeOutBack(p) {
-  const c1 = 1.70158 * 1.2;
-  const c3 = c1 + 1;
-  const t = p - 1;
-  return 1 + c3 * t * t * t + c1 * t * t;
+// Smooth scale-in (small → full) for the on-the-spot spawns — calm, no overshoot.
+function spawnScale(p) {
+  const t = Math.min(1, Math.max(0, p));
+  return 0.12 + 0.88 * (1 - Math.pow(1 - t, 2.4));
 }
 
 // Critically-damped spring toward a target ANGLE (shortest path). Unlike an
@@ -182,46 +162,18 @@ function AvatarModel({ cfg, motion }) {
     const d = Math.min(dt, 0.05);
     const { moving, running, jumping, speed, drop, dropStyle } = motion.current;
 
-    // ── DROP-IN flair on the INNER group (composes with rig.scale via multiply, so
-    // it can never resize the avatar). Per style: pop scales up with overshoot;
-    // bounce/comet stretch on the way down then squash & ring back on impact;
-    // parachute just sways. Cleared to identity once the drop is done.
+    // ── SPAWN-IN flair on the INNER group (composes with rig.scale via multiply, so
+    // it can never resize the avatar). The on-the-spot styles scale the body up from
+    // small to full as it appears; voxel holds small until its cubes have converged,
+    // then forms in the back half; settle just lands at full size (no gimmick).
+    // Cleared to identity once the spawn is done.
     const f = flairRef.current;
     if (f) {
-      if (drop > 0 && drop < 1) {
-        if (dropStyle === "pop") {
-          const s = Math.max(0.001, easeOutBack(drop));
-          f.scale.set(s, s, s);
-          f.rotation.set(0, 0, 0);
-        } else if (dropStyle === "parachute") {
-          f.scale.set(1, 1, 1);
-          f.rotation.set(0, 0, Math.sin(state.clock.elapsedTime * 2.1) * 0.12);
-        } else if (dropStyle === "comet") {
-          // a moderate stretch down the plunge, then a single hard SQUASH that
-          // rings out (it crashes and stays).
-          let sy;
-          if (drop < 0.6) {
-            sy = 1 + 0.5 * Math.sin((drop / 0.6) * Math.PI * 0.5);
-          } else {
-            const r = (drop - 0.6) / 0.4;
-            sy = 1 - 0.42 * Math.cos(r * Math.PI * 2.1) * Math.exp(-r * 5);
-          }
-          const sx = 1 / Math.sqrt(Math.max(0.2, sy));
-          f.scale.set(sx, sy, sx);
-          f.rotation.set(0, 0, 0);
-        } else {
-          // bounce: a modest stretch falling, then one squash + gentle rebound.
-          let sy;
-          if (drop < 0.42) {
-            sy = 1 + 0.26 * Math.sin((drop / 0.42) * Math.PI * 0.5);
-          } else {
-            const r = (drop - 0.42) / 0.58;
-            sy = 1 - 0.3 * Math.cos(r * Math.PI * 1.6) * Math.exp(-r * 2.6);
-          }
-          const sx = 1 / Math.sqrt(Math.max(0.2, sy));
-          f.scale.set(sx, sy, sx);
-          f.rotation.set(0, 0, 0);
-        }
+      if (drop > 0 && drop < 1 && dropStyle !== "settle") {
+        const p = dropStyle === "voxel" ? (drop - 0.35) / 0.65 : drop;
+        const s = spawnScale(p);
+        f.scale.set(s, s, s);
+        f.rotation.set(0, 0, 0);
       } else if (f.scale.x !== 1 || f.scale.y !== 1 || f.rotation.z !== 0) {
         f.scale.set(1, 1, 1);
         f.rotation.set(0, 0, 0);
@@ -291,15 +243,14 @@ export function Avatar() {
   const keys = useRef({});
   const dropping = useRef(true);
   const dropT = useRef(0); // 0→1 elapsed-time progress of the entrance
-  const dropStyleRef = useRef("bounce"); // locked at spawn so it can't change mid-drop
-  const burstFired = useRef(false); // impact dust/sparkle fired once
-  const canopyRef = useRef(0); // 0→1 parachute-canopy scale/opacity
-  const streakRef = useRef(0); // 0→1 comet streak visibility
-  const shakeRef = useRef(0); // comet impact camera shake amount
+  const dropStyleRef = useRef("materialize"); // locked at spawn so it can't change mid-drop
+  const ringRef = useRef(0); // materialize: 1→0 expanding glow ring
+  const beamRef = useRef(0); // beam: 0→1→0 light-column opacity
+  const bitsRef = useRef(0); // voxel: 1 (spread) → 0 (converged) cubes
   const guideTimer = useRef(0);
   const jumping = useRef(false);
   const jumpT = useRef(0);
-  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0, drop: 0, dropStyle: "bounce" });
+  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0, drop: 0, dropStyle: "materialize" });
   const tmpFwd = useRef(new THREE.Vector3());
   const tmpRight = useRef(new THREE.Vector3());
   const tmpMove = useRef(new THREE.Vector3());
@@ -347,10 +298,9 @@ export function Avatar() {
     motion.current.dropStyle = dropStyle;
     motion.current.drop = 0;
     dropT.current = 0;
-    burstFired.current = false;
-    canopyRef.current = 0;
-    streakRef.current = 0;
-    shakeRef.current = 0;
+    ringRef.current = 0;
+    beamRef.current = 0;
+    bitsRef.current = 0;
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
     yawVel.current = 0; // clear follow-spring momentum
@@ -471,31 +421,31 @@ export function Avatar() {
       const style = dropStyleRef.current;
       dropT.current = Math.min(1, dropT.current + d / (DROP_DUR[style] || 0.85));
       const p = dropT.current;
-      const top = groundY + (DROP_START_Y[style] ?? 12);
+      const top = groundY + (DROP_START_Y[style] ?? 0);
       avatarPos.y = top + (groundY - top) * dropFall(p, style);
       motion.current.drop = p;
-      // parachute canopy: fade in, hold, fade out near touchdown
-      let cy = 0;
-      if (style === "parachute") {
-        if (p < 0.1) cy = p / 0.1;
-        else if (p > 0.88) cy = Math.max(0, 1 - (p - 0.88) / 0.12);
-        else cy = 1;
-      }
-      canopyRef.current = cy;
-      // comet streak: a stretched trail above the avatar during the plunge.
-      streakRef.current = style === "comet" && p < 0.6 ? Math.min(1, p * 5) : 0;
-      // The ONLY landing particles are the SEASON ground burst (FootstepEffects on
-      // touchdown) — no generic sparkle/dust. Here we just add a soft thud-shake
-      // for the comet's arrival.
-      if (!burstFired.current && p >= (DROP_IMPACT[style] || 1)) {
-        burstFired.current = true;
-        if (style === "comet") shakeRef.current = 0.3; // soft thud, not a crash
-      }
+      // Drive the in-world effect for the active style; the others stay at 0.
+      // materialize: a warm ring blooms outward (1→0). beam: a light column fades
+      // in, holds, then fades out. voxel: cubes start spread (1) and converge (0).
+      ringRef.current = style === "materialize" && p < 1 ? 1 - p : 0;
+      beamRef.current =
+        style === "beam"
+          ? p < 0.18
+            ? p / 0.18
+            : p > 0.72
+            ? Math.max(0, 1 - (p - 0.72) / 0.28)
+            : 1
+          : 0;
+      bitsRef.current = style === "voxel" && p < 1 ? 1 - p : 0;
+      // The ONLY landing particles are the SEASON ground burst, emitted by
+      // FootstepEffects on the active edge — no generic sparkle/dust here.
       if (p >= 1) {
         avatarPos.y = groundY;
         dropping.current = false;
         motion.current.drop = 1;
-        canopyRef.current = 0;
+        ringRef.current = 0;
+        beamRef.current = 0;
+        bitsRef.current = 0;
         setLanded(true);
       }
     } else {
@@ -645,14 +595,6 @@ export function Avatar() {
       f.y + Math.sin(cp) * r + 1.0,
       f.z + Math.cos(yaw.current) * Math.cos(cp) * r,
     );
-    // Comet-impact camera shake — a quick decaying jitter.
-    if (shakeRef.current > 0.001) {
-      shakeRef.current = Math.max(0, shakeRef.current - d * 2.4);
-      const amp = shakeRef.current * 0.4;
-      camera.position.x += (Math.random() - 0.5) * amp;
-      camera.position.y += (Math.random() - 0.5) * amp;
-      camera.position.z += (Math.random() - 0.5) * amp;
-    }
     camera.lookAt(tmpTarget.current.set(f.x, f.y + 1.1, f.z));
 
     guideTimer.current += d;
@@ -673,8 +615,9 @@ export function Avatar() {
       {/* entrance flourishes — SIBLINGS (they place themselves in world space from
           avatarPos, so they must NOT be inside the moved `ref` group). Landing dust
           is the season FootstepEffects burst — no generic particles here. */}
-      <ParachuteCanopy canopyRef={canopyRef} />
-      <CometStreak streakRef={streakRef} />
+      <GlowRing ringRef={ringRef} />
+      <Beam beamRef={beamRef} />
+      <VoxelBits bitsRef={bitsRef} />
     </>
   );
 }

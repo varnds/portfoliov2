@@ -232,6 +232,7 @@ export function FootstepEffects({ seasonKey }) {
   const printCursor = useRef(0);
   const scuffCursor = useRef(0);
   const wasAir = useRef(false);
+  const wasActive = useRef(false);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
@@ -299,11 +300,23 @@ export function FootstepEffects({ seasonKey }) {
     // leaves / petals) kick up the instant it touches down, exactly like a footfall.
     const groundY = terrainHeight(avatarPos.x, avatarPos.z);
     const air = avatarPos.y > groundY + 0.2;
-    if (wasAir.current && !air) {
+    const landedThisFrame = wasAir.current && !air;
+    if (landedThisFrame) {
       emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.8, 1.7);
       emitScuff(fx, avatarPos.x, avatarPos.z, groundY, 2.4);
     }
     wasAir.current = air;
+
+    // ── spawn burst on the active edge. The on-the-spot styles (materialize /
+    // voxel / beam) appear AT ground level, so there's no air→ground transition to
+    // trigger the landing burst above — fire the season dust here instead the
+    // instant the avatar becomes active, so every spawn style kicks up its theme.
+    // Skip if a landing burst already fired this frame (settle) to avoid doubling.
+    if (avatarActive && !wasActive.current && !landedThisFrame) {
+      emitPuff(fx, avatarPos.x, avatarPos.z, groundY, 0, 0, 2.8, 1.7);
+      emitScuff(fx, avatarPos.x, avatarPos.z, groundY, 2.4);
+    }
+    wasActive.current = avatarActive;
 
     if (!avatarActive) {
       prev.current = null;

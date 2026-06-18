@@ -5,10 +5,10 @@ import { useGame, setDropStyle } from "./gameStore";
 import { RAIL_LABEL, RAIL_ROW, railChip } from "./railStyles";
 
 const DROPS = [
-  { id: "bounce", label: "Bounce" },
-  { id: "parachute", label: "Chute" },
-  { id: "comet", label: "Comet" },
-  { id: "pop", label: "Pop" },
+  { id: "materialize", label: "Materialize" },
+  { id: "voxel", label: "Voxel" },
+  { id: "beam", label: "Beam" },
+  { id: "settle", label: "Settle" },
 ];
 
 export function DropSwitcher({ visible }) {
