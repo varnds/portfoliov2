@@ -39,6 +39,13 @@ const TURN_YAW_SENS = 0.005; // rad per pixel of horizontal drag
 const TURN_PITCH_SENS = 0.004; // rad per pixel of vertical drag
 const PITCH_MIN = 0.06; // ~3° above horizon (never under the ground)
 const PITCH_MAX = 1.4; // ~80° — Roblox's MAX_Y clamp
+// ── Roblox "Follow" mode: while you move, the camera CONTINUOUSLY + gently trails
+// behind your travel direction — no deadzone, no threshold-snap. The turn is eased
+// (small course corrections barely move the camera) AND hard speed-capped, so even
+// a sharp 180° about-face can never whip the view: it just glides around over a
+// second or two. This is the key to "no drastic rotation when I turn."
+const FOLLOW_RATE = 1.3; // exp approach toward the heading (time-constant ≈ 0.77s)
+const FOLLOW_MAX_SPEED = 1.2; // rad/s hard cap on camera turn speed (~69°/s)
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
 
@@ -532,17 +539,14 @@ export function Avatar() {
     // camera never feeds back into the movement basis to curve a held key.
     // (ArrowUp resolves to a fixed world direction per frame; the basis only
     // drifts as yaw eases behind it, which is the chase, not a curl.)
-    // Three follow MODES (all spring-smoothed via smoothDampAngle so the camera
-    // eases in/out as one continuous motion — never lag-then-snap):
+    // Three camera MODES:
     //   • track  — LOCKED ¾ viewing angle: the camera glides to keep you centred
     //              but its angle never changes (drag won't spin it, movement won't
     //              swing it). Zero disorientation. The calm default.
-    //   • follow — eases BEHIND your heading, but with a DEADZONE so small left/
-    //              right wiggles don't rotate the view — it only re-centers on a
-    //              real, sustained turn (and more gently than before).
+    //   • follow — Roblox Follow Mode: while you move, the camera CONTINUOUSLY +
+    //              gently trails behind your travel direction. No deadzone, no
+    //              snap; the turn is eased and hard speed-capped so it never whips.
     //   • free   — pure manual orbit: drag to spin the camera wherever you like.
-    // (This is the concrete Track-vs-Free difference: Track's yaw is fixed; Free's
-    // yaw follows your drag.)
     // ── Roblox-style manual turn: consume the accumulated drag delta and apply it
     // DIRECTLY to the live camera angle this frame — no spring, so left/right turning
     // tracks the input exactly (never lags behind, never snaps to catch up). We sync
@@ -561,26 +565,34 @@ export function Avatar() {
     ri.x = 0;
     ri.y = 0;
 
-    let targetYaw = cameraMode === "track" ? TRACK_YAW : yawT.current;
-    let smoothTime = 0.12; // manual / track: settle to the chosen angle promptly
-    const follow = cameraMode === "follow" && !drag.current;
-    if (follow && moved) {
-      // Heading the player is walking (raw input → no smoothing lag).
-      const headingYaw = Math.atan2(-inDirX.current, -inDirZ.current);
-      // Deadzone: only chase the heading once it diverges from where the camera
-      // already sits by more than ~22°. Small strafes stay put → no whip.
-      let off = headingYaw - yaw.current;
-      off = Math.atan2(Math.sin(off), Math.cos(off));
-      const DEADZONE = 0.45; // ~26° — ignore wiggle before re-centering
-      if (Math.abs(off) > DEADZONE) {
-        targetYaw = headingYaw;
-        yawT.current = headingYaw; // keep manual-drag target in sync
-        smoothTime = 1.5; // SLOW drift behind the heading — a gentle turn, not a twist
-      } else {
-        targetYaw = yaw.current; // within deadzone — hold the current angle
+    if (cameraMode === "follow") {
+      // Roblox Follow Mode. While moving (and not mid-drag), ease the camera yaw
+      // toward the travel direction CONTINUOUSLY — from the very first degree of
+      // divergence, with no deadzone and no threshold. Two things keep it gentle:
+      //   1. an exponential approach, so small course corrections move the camera
+      //      only a little (the turn rate scales with how off-angle you are), and
+      //   2. a hard per-frame SPEED CAP, so a big/sudden turn can't whip the view —
+      //      it glides around at a bounded rate instead.
+      // Idle → hold the current angle (no drift). Manual drag (applied directly
+      // above) overrides; follow resumes gently from wherever you left it.
+      if (!drag.current && moved) {
+        const headingYaw = Math.atan2(-inDirX.current, -inDirZ.current);
+        let off = headingYaw - yaw.current;
+        off = Math.atan2(Math.sin(off), Math.cos(off)); // shortest signed angle
+        let step = off * (1 - Math.exp(-FOLLOW_RATE * d)); // eased fraction toward heading
+        const maxStep = FOLLOW_MAX_SPEED * d; // hard cap: never turn faster than this
+        if (step > maxStep) step = maxStep;
+        else if (step < -maxStep) step = -maxStep;
+        yaw.current += step;
+        yawT.current = yaw.current; // keep the manual-drag target synced
       }
+      yawVel.current = 0; // follow drives yaw directly — no spring momentum to carry
+    } else {
+      // track: settle to the fixed angle; free: settle to the drag target (a no-op
+      // right after a direct drag, since yawT was synced to yaw above).
+      const targetYaw = cameraMode === "track" ? TRACK_YAW : yawT.current;
+      yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, 0.12, d);
     }
-    yaw.current = smoothDampAngle(yaw.current, targetYaw, yawVel, smoothTime, d);
     // Track holds a fixed, higher top-down pitch (ignores drag) so you see every
     // direction without rotating; Follow/Free use the drag-set pitch.
     const pitchTarget = cameraMode === "track" ? TRACK_PITCH : pitchT.current;
