@@ -30,8 +30,11 @@ export function GlowRing({ ringRef }) {
   });
   return (
     <group ref={g} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
-      <mesh>
-        <ringGeometry args={[0.6, 0.82, 44]} />
+      {/* renderOrder + depthTest off so the flat ground ring always reads as a FULL
+          circle — otherwise the far side sinks below sloped terrain and gets
+          occluded, showing only a partial arc. Additive, so drawing on top glows. */}
+      <mesh renderOrder={20}>
+        <ringGeometry args={[0.6, 0.82, 64]} />
         <meshBasicMaterial
           ref={mat}
           color="#FFE3A8"
@@ -39,6 +42,7 @@ export function GlowRing({ ringRef }) {
           opacity={0.7}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          depthTest={false}
           side={THREE.DoubleSide}
         />
       </mesh>

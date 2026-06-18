@@ -3639,7 +3639,9 @@ export default function App() {
           boxSizing: "border-box",
           background: footerBg,
           padding: "0 40px",
-          display: "flex",
+          // Hidden in the 3D world view — frees the bottom space for the Wash Day
+          // caption to sit lower (the 2D portfolio still has its footer nav).
+          display: scene3D ? "none" : "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",

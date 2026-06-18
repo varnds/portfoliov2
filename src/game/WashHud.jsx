@@ -196,7 +196,7 @@ export function WashHud() {
           aria-live="polite"
           style={{
             position: "absolute",
-            bottom: 150,
+            bottom: 70,
             left: "50%",
             transform: "translateX(-50%)",
             maxWidth: "min(560px, 88vw)",
@@ -218,14 +218,16 @@ export function WashHud() {
             animation: "washPromptIn 0.4s ease both",
           }}
         >
-          <svg aria-hidden width="22" height="20" viewBox="0 0 22 20" style={{ flexShrink: 0 }}>
-            {/* little orange guide bird (matches the in-world OrangeBird palette) */}
-            <ellipse cx="9" cy="11.5" rx="6.5" ry="5.8" fill="#EA580C" />
-            <ellipse cx="9.5" cy="13" rx="4.2" ry="3.6" fill="#FCD9A8" />
-            <circle cx="14" cy="7" r="4" fill="#F97316" />
-            <polygon points="17.6,6.2 21.5,7.2 17.6,8.6" fill="#FACC15" />
-            <circle cx="14.6" cy="6.4" r="1" fill="#1A1208" />
-            <path d="M3 9.5 Q0.5 7.5 2.5 12.5 Z" fill="#C2410C" />
+          <svg aria-hidden width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+            {/* just the bird's FACE (head), matching the OrangeBird palette */}
+            <circle cx="9" cy="10" r="7" fill="#F97316" />
+            {/* cream cheek/face patch */}
+            <circle cx="7.8" cy="11.4" r="4" fill="#FCD9A8" />
+            {/* eye + highlight */}
+            <circle cx="10.3" cy="8.2" r="1.35" fill="#1A1208" />
+            <circle cx="10.75" cy="7.8" r="0.42" fill="#FFFFFF" />
+            {/* beak */}
+            <polygon points="15.4,9.2 19.4,10.1 15.4,11.3" fill="#FACC15" />
           </svg>
           <span>{WASH_BEATS[phase].replace(/\*/g, "")}</span>
         </div>
