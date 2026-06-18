@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
-import { DropBurst, ParachuteCanopy, CometStreak } from "./DropEffects";
+import { ParachuteCanopy, CometStreak } from "./DropEffects";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
@@ -43,10 +43,10 @@ const DROP_DUR = { bounce: 0.95, parachute: 1.7, comet: 2.3, pop: 0.55 };
 // Start the fall LOW enough that the avatar is in the (ground-framed) shot for the
 // whole descent, so you actually see the entrance instead of it happening above
 // the top edge. Parachute starts lowest (a gentle in-frame float); pop doesn't fall.
-const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 11, pop: 0 };
+const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 11, pop: 2.6 };
 const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
 function dropFall(p, style) {
-  if (style === "pop") return 1; // no fall — already on the ground, just pops in
+  if (style === "pop") return Math.min(1, p / 0.72); // a quick little drop so it lands (season puff)
   if (style === "comet") {
     // ONE gentle accelerating descent to the ground by 0.6, then it settles (a
     // slow shooting-star arrival, not a crash). The long fall lets the streak read.
@@ -293,8 +293,6 @@ export function Avatar() {
   const dropT = useRef(0); // 0→1 elapsed-time progress of the entrance
   const dropStyleRef = useRef("bounce"); // locked at spawn so it can't change mid-drop
   const burstFired = useRef(false); // impact dust/sparkle fired once
-  const poofSeq = useRef(0); // bump → DropBurst fires
-  const poofKind = useRef("dust"); // "dust" | "sparkle"
   const canopyRef = useRef(0); // 0→1 parachute-canopy scale/opacity
   const streakRef = useRef(0); // 0→1 comet streak visibility
   const shakeRef = useRef(0); // comet impact camera shake amount
@@ -486,16 +484,11 @@ export function Avatar() {
       canopyRef.current = cy;
       // comet streak: a stretched trail above the avatar during the plunge.
       streakRef.current = style === "comet" && p < 0.6 ? Math.min(1, p * 5) : 0;
-      // fire the impact flair once, at the style's arrival moment. The SEASON
-      // ground burst (FootstepEffects, on touchdown) kicks up the dust for every
-      // style; here we only add the magical SPARKLE for parachute/pop, and a
-      // gentle thud-shake for the comet.
+      // The ONLY landing particles are the SEASON ground burst (FootstepEffects on
+      // touchdown) — no generic sparkle/dust. Here we just add a soft thud-shake
+      // for the comet's arrival.
       if (!burstFired.current && p >= (DROP_IMPACT[style] || 1)) {
         burstFired.current = true;
-        if (style === "parachute" || style === "pop") {
-          poofKind.current = "sparkle";
-          poofSeq.current += 1;
-        }
         if (style === "comet") shakeRef.current = 0.3; // soft thud, not a crash
       }
       if (p >= 1) {
@@ -678,8 +671,8 @@ export function Avatar() {
         </Suspense>
       </group>
       {/* entrance flourishes — SIBLINGS (they place themselves in world space from
-          avatarPos, so they must NOT be inside the moved `ref` group) */}
-      <DropBurst seqRef={poofSeq} kindRef={poofKind} />
+          avatarPos, so they must NOT be inside the moved `ref` group). Landing dust
+          is the season FootstepEffects burst — no generic particles here. */}
       <ParachuteCanopy canopyRef={canopyRef} />
       <CometStreak streakRef={streakRef} />
     </>
