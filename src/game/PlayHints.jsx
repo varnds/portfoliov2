@@ -38,12 +38,11 @@ export function WelcomeCard() {
         inset: 0,
         zIndex: 9400,
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
-        // anchor the card LOW and keep the scrim light so your character (who
-        // drops in centre-screen) stays visible instead of hidden behind the card
-        paddingBottom: "8vh",
-        background: leaving ? "rgba(20,12,8,0)" : "rgba(20,12,8,0.14)",
+        // centred now — the avatar waits out of frame until the card fades, so it
+        // can sit over the establishing shot without covering the character
+        background: leaving ? "rgba(20,12,8,0)" : "rgba(20,12,8,0.20)",
         pointerEvents: "none",
         transition: "background 0.42s ease",
       }}

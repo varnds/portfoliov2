@@ -39,7 +39,7 @@ const JUMP_H = 1.7;
 // spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
 // (burst fires); KIND = the burst flavour. The squash/scale flair lives in
 // AvatarModel and is applied to an INNER group so it never touches rig.scale.
-const DROP_DUR = { bounce: 1.35, parachute: 1.6, comet: 1.15, pop: 0.6 };
+const DROP_DUR = { bounce: 1.35, parachute: 1.6, comet: 1.75, pop: 0.6 };
 const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
 function dropFall(p, style) {
   if (style === "pop") return 1; // no fall — already on the ground, just pops in
