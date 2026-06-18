@@ -93,6 +93,26 @@ export function DropBurst({ seqRef, kindRef }) {
 
 export function ParachuteCanopy({ canopyRef }) {
   const g = useRef();
+  // Precompute the shroud lines: thin cords from the dome rim converging to a
+  // harness point below (where the avatar hangs).
+  const strings = React.useMemo(() => {
+    const arr = [];
+    const NS = 8;
+    const rimR = 0.92;
+    const low = new THREE.Vector3(0, -1.35, 0); // harness point (relative to rim plane)
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < NS; i += 1) {
+      const a = (i / NS) * Math.PI * 2;
+      const rim = new THREE.Vector3(Math.cos(a) * rimR, 0, Math.sin(a) * rimR);
+      const dir = low.clone().sub(rim);
+      const len = dir.length();
+      const mid = rim.clone().add(low).multiplyScalar(0.5);
+      const q = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
+      arr.push({ pos: [mid.x, mid.y, mid.z], quat: [q.x, q.y, q.z, q.w], len });
+    }
+    return arr;
+  }, []);
+
   useFrame((st) => {
     const grp = g.current;
     if (!grp) return;
@@ -100,24 +120,34 @@ export function ParachuteCanopy({ canopyRef }) {
     grp.visible = s > 0.01;
     if (s <= 0.01) return;
     const t = st.clock.elapsedTime;
-    grp.position.set(avatarPos.x + Math.sin(t * 2.1) * 0.18, avatarPos.y + 2.0, avatarPos.z);
-    grp.rotation.z = Math.sin(t * 2.1) * 0.16;
+    // sit above the avatar; gentle pendulum sway (matches the avatar's tilt)
+    grp.position.set(avatarPos.x + Math.sin(t * 2.1) * 0.25, avatarPos.y + 2.7, avatarPos.z);
+    grp.rotation.z = Math.sin(t * 2.1) * 0.14;
     grp.scale.setScalar(s);
   });
+
   return (
     <group ref={g} visible={false}>
-      <mesh position={[0, 0.55, 0]} castShadow>
-        <coneGeometry args={[0.95, 0.55, 14, 1, true]} />
-        <meshStandardMaterial color="#E2725B" roughness={0.85} side={THREE.DoubleSide} />
+      {/* rounded canopy dome (top hemisphere) */}
+      <mesh position={[0, 0, 0]} castShadow>
+        <sphereGeometry args={[1.0, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#E2725B" roughness={0.82} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, 0.28, 0]}>
-        <torusGeometry args={[0.9, 0.04, 6, 18]} />
+      {/* cream gores band just under the crown for a printed-panel feel */}
+      <mesh position={[0, 0.42, 0]} castShadow>
+        <sphereGeometry args={[0.78, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2.4]} />
+        <meshStandardMaterial color="#F3E4CF" roughness={0.85} side={THREE.DoubleSide} />
+      </mesh>
+      {/* scalloped rim */}
+      <mesh position={[0, 0, 0]}>
+        <torusGeometry args={[0.96, 0.05, 8, 22]} />
         <meshStandardMaterial color="#C45B45" roughness={0.85} />
       </mesh>
-      {[-0.8, -0.28, 0.28, 0.8].map((x, i) => (
-        <mesh key={i} position={[x, -0.45, 0]} rotation={[0, 0, -x * 0.5]}>
-          <cylinderGeometry args={[0.012, 0.012, 1.5, 5]} />
-          <meshStandardMaterial color="#8A7256" roughness={0.9} />
+      {/* shroud lines converging to the harness */}
+      {strings.map((s, i) => (
+        <mesh key={i} position={s.pos} quaternion={s.quat}>
+          <cylinderGeometry args={[0.012, 0.012, s.len, 5]} />
+          <meshStandardMaterial color="#6E5A44" roughness={0.9} />
         </mesh>
       ))}
     </group>

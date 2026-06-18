@@ -39,7 +39,11 @@ const JUMP_H = 1.7;
 // spawn height, 1 = on the ground); IMPACT = the p at which the body "arrives"
 // (burst fires); KIND = the burst flavour. The squash/scale flair lives in
 // AvatarModel and is applied to an INNER group so it never touches rig.scale.
-const DROP_DUR = { bounce: 1.35, parachute: 1.6, comet: 1.75, pop: 0.6 };
+const DROP_DUR = { bounce: 0.95, parachute: 1.7, comet: 1.05, pop: 0.55 };
+// Start the fall LOW enough that the avatar is in the (ground-framed) shot for the
+// whole descent, so you actually see the entrance instead of it happening above
+// the top edge. Parachute starts lowest (a gentle in-frame float); pop doesn't fall.
+const DROP_START_Y = { bounce: 12, parachute: 4.5, comet: 15, pop: 0 };
 const DROP_IMPACT = { bounce: 0.4, comet: 0.6, parachute: 0.97, pop: 0.04 };
 function dropFall(p, style) {
   if (style === "pop") return 1; // no fall — already on the ground, just pops in
@@ -51,13 +55,13 @@ function dropFall(p, style) {
     return f * f * f;
   }
   if (style === "parachute") return 1 - Math.pow(1 - Math.min(1, p), 1.8); // gentle, ease-out
-  // bounce: a quick plunge, then 2–3 DECAYING bounces that settle (a rubber ball).
-  if (p < 0.4) {
-    const f = p / 0.4;
+  // bounce: a quick plunge, then ONE clean rebound that settles.
+  if (p < 0.42) {
+    const f = p / 0.42;
     return f * f;
   }
-  const r = (p - 0.4) / 0.6; // 0→1 over the bouncing
-  return 1 - Math.abs(Math.sin(r * Math.PI * 2.5)) * 0.3 * Math.exp(-r * 2.6);
+  const r = (p - 0.42) / 0.58;
+  return 1 - Math.max(0, Math.sin(r * Math.PI)) * 0.22 * Math.exp(-r * 1.6);
 }
 function easeOutBack(p) {
   const c1 = 1.70158 * 1.2;
@@ -193,28 +197,26 @@ function AvatarModel({ cfg, motion }) {
           f.scale.set(1, 1, 1);
           f.rotation.set(0, 0, Math.sin(state.clock.elapsedTime * 2.1) * 0.12);
         } else if (dropStyle === "comet") {
-          // big STRETCH down the long plunge, then a single hard SQUASH that rings
-          // out (it crashes and stays).
+          // a moderate stretch down the plunge, then a single hard SQUASH that
+          // rings out (it crashes and stays).
           let sy;
           if (drop < 0.6) {
-            sy = 1 + 0.75 * Math.sin((drop / 0.6) * Math.PI * 0.5);
+            sy = 1 + 0.5 * Math.sin((drop / 0.6) * Math.PI * 0.5);
           } else {
             const r = (drop - 0.6) / 0.4;
-            sy = 1 - 0.5 * Math.cos(r * Math.PI * 2.1) * Math.exp(-r * 5);
+            sy = 1 - 0.42 * Math.cos(r * Math.PI * 2.1) * Math.exp(-r * 5);
           }
           const sx = 1 / Math.sqrt(Math.max(0.2, sy));
           f.scale.set(sx, sy, sx);
           f.rotation.set(0, 0, 0);
         } else {
-          // bounce: a modest stretch on the way down, then the squash OSCILLATES
-          // in sync with the decaying bounces (springy rubber ball).
+          // bounce: a modest stretch falling, then one squash + gentle rebound.
           let sy;
-          if (drop < 0.4) {
-            sy = 1 + 0.3 * Math.sin((drop / 0.4) * Math.PI * 0.5);
+          if (drop < 0.42) {
+            sy = 1 + 0.26 * Math.sin((drop / 0.42) * Math.PI * 0.5);
           } else {
-            const r = (drop - 0.4) / 0.6;
-            // negative cos → squash at each ground contact, stretch at each apex
-            sy = 1 - 0.34 * Math.cos(r * Math.PI * 2.5) * Math.exp(-r * 2.6);
+            const r = (drop - 0.42) / 0.58;
+            sy = 1 - 0.3 * Math.cos(r * Math.PI * 1.6) * Math.exp(-r * 2.6);
           }
           const sx = 1 / Math.sqrt(Math.max(0.2, sy));
           f.scale.set(sx, sy, sx);
@@ -471,7 +473,7 @@ export function Avatar() {
       const style = dropStyleRef.current;
       dropT.current = Math.min(1, dropT.current + d / (DROP_DUR[style] || 0.85));
       const p = dropT.current;
-      const top = SPAWN.y;
+      const top = groundY + (DROP_START_Y[style] ?? 12);
       avatarPos.y = top + (groundY - top) * dropFall(p, style);
       motion.current.drop = p;
       // parachute canopy: fade in, hold, fade out near touchdown
