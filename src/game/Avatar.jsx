@@ -20,7 +20,6 @@ import * as THREE from "three";
 import { avatarPos, setLanded, refreshGuideTarget, useGame, chase, resolveCollisions, occlusionMaxDist } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { AVATARS, AVATAR_BY_ID, DEFAULT_AVATAR } from "./avatarConfig";
-import LandingPoof from "./LandingPoof";
 
 AVATARS.forEach((a) => useGLTF.preload(a.url));
 
@@ -33,7 +32,6 @@ const TRACK_YAW = 0.4; // fixed ¾ camera angle for the calm "Track" mode
 const TRACK_PITCH = 0.66; // higher, more top-down so every walk direction is visible without rotating
 const JUMP_DUR = 0.66;
 const JUMP_H = 1.7;
-const DROP_DUR = 1.25; // seconds for the whole drop-in timeline (0→1), frame-pacing-proof
 
 // Critically-damped spring toward a target ANGLE (shortest path). Unlike an
 // exponential lerp — which is fastest the instant the target jumps and then
@@ -144,59 +142,7 @@ function AvatarModel({ cfg, motion }) {
 
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.05);
-    const { moving, running, jumping, speed, drop } = motion.current;
-
-    // ── DROP-IN flair: squash/stretch + a playful spin, all keyed off the
-    // parent's 0→1 `drop` progress. While falling fast the body STRETCHES thin
-    // and tall; on impact it SQUASHES wide and short, then springs back through
-    // a small overshoot to normal. A lazy half-spin unwinds on the way down so
-    // it lands facing forward. Volume-preserving (wide ↔ tall) so it reads as a
-    // bouncy toy, not a scaling glitch. Applied to rigRef so it composes with
-    // the outer `rig.scale`. When drop is done (>=1 and settled) we leave the
-    // rig at identity for normal play.
-    if (rigRef.current && drop > 0 && drop < 1) {
-      const p = drop;
-      let sx = 1;
-      let sy = 1;
-      let spin = 0;
-      let lift = 0;
-      if (p < 0.18) {
-        // anticipation: a tiny crouch/wind-up at the top
-        const a = p / 0.18;
-        sy = 1 - 0.12 * Math.sin(a * Math.PI);
-        sx = 1 + 0.08 * Math.sin(a * Math.PI);
-        spin = Math.PI; // start of the unwinding half-spin
-      } else {
-        const q = (p - 0.18) / 0.82; // 0→1 over fall+settle
-        if (q < 0.74) {
-          // PLUNGE: stretch thin & tall, peaking with fall speed
-          const s = Math.sin((q / 0.74) * Math.PI * 0.5); // 0→1
-          sy = 1 + 0.45 * s;
-          sx = 1 / Math.sqrt(sy); // preserve volume → narrows as it lengthens
-          spin = Math.PI * (1 - q / 0.74); // unwind the half-spin to 0 by impact
-          lift = 0;
-        } else {
-          // IMPACT → SETTLE: squash wide, then a damped spring back to 1.
-          const r = (q - 0.74) / 0.26; // 0→1 after impact
-          // squash amount rings down: big at impact, overshoots past 1, settles
-          const ring = Math.cos(r * Math.PI * 2.2) * Math.exp(-r * 4.5);
-          sy = 1 - 0.4 * ring; // <1 at impact (squashed), springs up & settles
-          sx = 1 / Math.sqrt(Math.max(0.2, sy));
-          spin = 0;
-        }
-      }
-      rigRef.current.scale.set(sx, sy, sx);
-      rigRef.current.rotation.y = spin;
-      rigRef.current.position.y = lift;
-      // hold the locomotion clips on idle but skip their per-frame transform
-      // writes (position/rotation) so they don't fight the squash/stretch.
-      return;
-    } else if (rigRef.current && rigRef.current.scale.y !== 1) {
-      // drop just finished (or never ran): clear any leftover squash/spin so
-      // normal play starts from a clean identity transform.
-      rigRef.current.scale.set(1, 1, 1);
-      rigRef.current.rotation.y = 0;
-    }
+    const { moving, running, jumping, speed } = motion.current;
 
     if (hasClips && actions) {
       let want;
@@ -258,14 +204,10 @@ export function Avatar() {
   const ref = useRef();
   const keys = useRef({});
   const dropping = useRef(true);
-  const dropT = useRef(0); // 0→1 elapsed-time progress of the drop-in (frame-pacing-proof)
-  const dropStartY = useRef(SPAWN.y); // y the drop eases down FROM
-  const poofSeq = useRef(0); // bumped on impact to fire the dust poof
   const guideTimer = useRef(0);
   const jumping = useRef(false);
   const jumpT = useRef(0);
-  // `drop` (0→1) lets the model apply squash/stretch + spin during the entrance.
-  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0, drop: 0 });
+  const motion = useRef({ moving: false, running: false, jumping: false, speed: 0 });
   const tmpFwd = useRef(new THREE.Vector3());
   const tmpRight = useRef(new THREE.Vector3());
   const tmpMove = useRef(new THREE.Vector3());
@@ -304,9 +246,6 @@ export function Avatar() {
     if (!playing) return;
     avatarPos.copy(SPAWN);
     dropping.current = true;
-    dropT.current = 0;
-    dropStartY.current = SPAWN.y;
-    motion.current.drop = 0;
     jumping.current = false;
     focus.current = null; // re-center the camera focus on spawn
     yawVel.current = 0; // clear follow-spring momentum
@@ -407,40 +346,10 @@ export function Avatar() {
     }
 
     if (dropping.current) {
-      // Drive the whole entrance off an accumulated 0→1 timeline rather than a
-      // y-easing threshold: this lands reliably in ~DROP_DUR seconds no matter
-      // how the frames are paced (headless / throttled rAF can't stall it), and
-      // gives the squash/stretch reliable timing.
-      dropT.current = Math.min(1, dropT.current + d / DROP_DUR);
-      const p = dropT.current;
-      // Height curve: a brief ANTICIPATION hang at the top, then a snappy
-      // accelerating PLUNGE (ease-in), then a small BOUNCE that overshoots the
-      // ground and settles. Built from a 0→1 "fallen" fraction.
-      let fall;
-      if (p < 0.18) {
-        // hang / wind-up: barely moves, slight extra rise for anticipation
-        fall = -0.04 * Math.sin((p / 0.18) * Math.PI);
-      } else {
-        const q = (p - 0.18) / 0.82; // 0→1 over the fall+settle
-        // Accelerating PLUNGE that bottoms out (reaches the ground) right at the
-        // model's impact at q≈0.74, so the squash and the touchdown line up.
-        const f = Math.min(1, q / 0.74);
-        const plunge = f * f; // ease-in to ground
-        // damped BOUNCE after touchdown: a quick hop back up that rings out to 0.
-        const r = q > 0.74 ? (q - 0.74) / 0.26 : -1; // 0→1 after impact, else inactive
-        // a single decaying hop UP (clamped ≥0 so the body never sinks below ground)
-        const bounce = r >= 0 ? Math.max(0, Math.sin(r * Math.PI)) * 0.1 * Math.exp(-r * 2.5) : 0;
-        fall = plunge - bounce; // bounce lifts it slightly above ground, then settles
-      }
-      const top = dropStartY.current;
-      avatarPos.y = top + (groundY - top) * fall;
-      // expose progress so the model can squash/stretch + spin in sync
-      motion.current.drop = p;
-      if (p >= 1) {
+      avatarPos.y += (groundY - avatarPos.y) * Math.min(1, d * 3.2);
+      if (avatarPos.y <= groundY + 0.06) {
         avatarPos.y = groundY;
         dropping.current = false;
-        motion.current.drop = 1;
-        poofSeq.current += 1; // kick the dust poof
         setLanded(true);
       }
     } else {
@@ -603,7 +512,6 @@ export function Avatar() {
       <Suspense fallback={null}>
         <AvatarModel key={avatarVariant} cfg={cfg} motion={motion} />
       </Suspense>
-      <LandingPoof seqRef={poofSeq} />
     </group>
   );
 }
