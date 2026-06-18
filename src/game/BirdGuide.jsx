@@ -20,7 +20,7 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { WASH_BEATS } from "./washStory";
-import { avatarPos } from "./gameStore";
+import { avatarPos, avatarActive, useGame } from "./gameStore";
 import { terrainHeight } from "../scene3d/coords";
 import { OrangeBirdShape } from "../scene3d/birdShape";
 
@@ -142,6 +142,8 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const lastPhase = useRef(phase); // detect a new objective → point-dart + flourish
   const flourish = useRef(0); // seconds left of an excited spin+hop on a new leg
   const point = useRef(0); // seconds left of the "dart toward target then return"
+  const wasActive = useRef(false); // detect the spawn (avatarActive rising edge)
+  const greet = useRef(0); // seconds left of the "hello, right beside you" beat at spawn
 
   // Derived player heading (we don't get it from the store): a smoothed unit
   // vector of where the player is moving, held steady while they stand still.
@@ -151,6 +153,9 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
   const lastAZ = useRef(avatarPos.z);
 
   const line = useMemo(() => WASH_BEATS[phase] || "", [phase]);
+  // drei <Html> doesn't auto-hide when its 3D parent is invisible, so gate the
+  // bubble's RENDER on `landed` — otherwise the bird's words show before you spawn.
+  const { landed } = useGame();
 
   useFrame((st, dt) => {
     const g = root.current;
@@ -159,11 +164,24 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
     const d = dt > 0 ? dt : 1 / 60; // guard against a zero/NaN dt
 
     const target = targetRef?.current;
-    if (!target) {
+    // Don't appear until the avatar has actually SPAWNED (landed). Otherwise the
+    // bird is hovering in an empty scene over the welcome modal, before you exist.
+    if (!target || !avatarActive) {
       g.visible = false;
+      wasActive.current = false;
       return;
     }
     g.visible = true;
+
+    // On spawn (avatarActive rising edge): the bird appears RIGHT BESIDE you for a
+    // friendly hello, then eases out to lead the way.
+    if (!wasActive.current) {
+      wasActive.current = true;
+      greet.current = 1.6;
+      posRef.current = null; // re-place beside the player, don't fly in from afar
+    }
+    greet.current = Math.max(0, greet.current - d);
+    const greeting = greet.current > 0 ? greet.current / 1.6 : 0; // 1→0
 
     const a = avatarPos; // live player position
 
@@ -218,8 +236,19 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
       baseZ = target.z;
     } else {
       const reach = Math.min(LEAD + (POINT_REACH - LEAD) * pt, tdist);
-      baseX = a.x + tux * reach;
-      baseZ = a.z + tuz * reach;
+      const leadX = a.x + tux * reach;
+      const leadZ = a.z + tuz * reach;
+      if (greeting > 0) {
+        // greet spot: right beside the player (a step to the side + slightly toward
+        // the goal), then blend out to the lead spot as the hello fades.
+        const helloX = a.x + tux * 0.5 - tuz * 1.1;
+        const helloZ = a.z + tuz * 0.5 + tux * 1.1;
+        baseX = leadX + (helloX - leadX) * greeting;
+        baseZ = leadZ + (helloZ - leadZ) * greeting;
+      } else {
+        baseX = leadX;
+        baseZ = leadZ;
+      }
     }
 
     // Hover a fixed height above the GROUND at the lead spot (not the avatar's Y,
@@ -275,8 +304,8 @@ export function BirdGuide({ phase, targetRef, celebrate = false }) {
       <group scale={0.42}>
         <OrangeBirdShape wingL={wingL} wingR={wingR} />
       </group>
-      {/* hide the bubble during the celebration loop (HUD banner takes over) */}
-      {!celebrate && <SpeechBubble text={line} />}
+      {/* only once you've spawned, and not during the celebration loop (HUD banner takes over) */}
+      {landed && !celebrate && <SpeechBubble text={line} />}
     </group>
   );
 }

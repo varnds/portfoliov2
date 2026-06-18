@@ -40,7 +40,7 @@ function promptFor(phase, nearPanel, nearWasher, nearPeg, washP, dryP) {
 }
 
 export function WashHud() {
-  const { gameMode, playing } = useGame();
+  const { gameMode, playing, landed } = useGame();
   const { phase, washP, dryP, nearPanel, nearWasher, nearPeg } = useWash();
 
   // Live mirror of the gate so the global key listener can early-out without
@@ -124,7 +124,9 @@ export function WashHud() {
     if (phase !== "washing" && phase !== "drying") setHolding(false);
   }, [phase]);
 
-  if (gameMode !== "wash" || !playing) return null;
+  // Don't narrate until the avatar has actually SPAWNED (landed) — otherwise the
+  // bird's "Follow me!" caption shows over the welcome modal, before you exist.
+  if (gameMode !== "wash" || !playing || !landed) return null;
 
   // ── On-screen button: press-and-hold for wash/dry, single press otherwise ──
   const holdStart = (e) => {
@@ -214,7 +216,15 @@ export function WashHud() {
             animation: "washPromptIn 0.4s ease both",
           }}
         >
-          <span aria-hidden style={{ fontSize: 18, flexShrink: 0 }}>🐦</span>
+          <svg aria-hidden width="22" height="20" viewBox="0 0 22 20" style={{ flexShrink: 0 }}>
+            {/* little orange guide bird (matches the in-world OrangeBird palette) */}
+            <ellipse cx="9" cy="11.5" rx="6.5" ry="5.8" fill="#EA580C" />
+            <ellipse cx="9.5" cy="13" rx="4.2" ry="3.6" fill="#FCD9A8" />
+            <circle cx="14" cy="7" r="4" fill="#F97316" />
+            <polygon points="17.6,6.2 21.5,7.2 17.6,8.6" fill="#FACC15" />
+            <circle cx="14.6" cy="6.4" r="1" fill="#1A1208" />
+            <path d="M3 9.5 Q0.5 7.5 2.5 12.5 Z" fill="#C2410C" />
+          </svg>
           <span>{WASH_BEATS[phase].replace(/\*/g, "")}</span>
         </div>
       )}
