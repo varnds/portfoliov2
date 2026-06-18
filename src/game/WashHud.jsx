@@ -218,7 +218,7 @@ export function WashHud() {
             animation: "washPromptIn 0.4s ease both",
           }}
         >
-          <svg aria-hidden width="20" height="20" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+          <svg aria-hidden width="30" height="30" viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
             {/* just the bird's FACE (head), matching the OrangeBird palette */}
             <circle cx="9" cy="10" r="7" fill="#F97316" />
             {/* cream cheek/face patch */}
@@ -226,8 +226,8 @@ export function WashHud() {
             {/* eye + highlight */}
             <circle cx="10.3" cy="8.2" r="1.35" fill="#1A1208" />
             <circle cx="10.75" cy="7.8" r="0.42" fill="#FFFFFF" />
-            {/* beak */}
-            <polygon points="15.4,9.2 19.4,10.1 15.4,11.3" fill="#FACC15" />
+            {/* beak — black */}
+            <polygon points="15.4,9.2 19.4,10.1 15.4,11.3" fill="#1A1208" />
           </svg>
           <span>{WASH_BEATS[phase].replace(/\*/g, "")}</span>
         </div>

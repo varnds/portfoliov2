@@ -2048,7 +2048,9 @@ export default function App() {
         <div style={{
           position: "absolute",
           inset: 0,
-          bottom: FOOTER_HEIGHT,
+          // 2D leaves room for the footer nav; the 3D world fills the whole screen
+          // (its footer is hidden), so the canvas reaches the bottom edge — no band.
+          bottom: scene3D ? 0 : FOOTER_HEIGHT,
           display: "flex",
           flexDirection: "column",
         }}>

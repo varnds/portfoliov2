@@ -21,10 +21,10 @@ export function OrangeBirdShape({ wingL, wingR }) {
         <sphereGeometry args={[0.3, 14, 12]} />
         <meshStandardMaterial color="#F97316" roughness={0.82} />
       </mesh>
-      {/* beak (+X) */}
+      {/* beak (+X) — black */}
       <mesh position={[0.74, 0.26, 0]} rotation={[0, 0, -Math.PI / 2]}>
         <coneGeometry args={[0.08, 0.22, 8]} />
-        <meshStandardMaterial color="#FACC15" roughness={0.6} />
+        <meshStandardMaterial color="#1A1208" roughness={0.6} />
       </mesh>
       {/* eyes */}
       <mesh position={[0.56, 0.36, 0.14]}>
