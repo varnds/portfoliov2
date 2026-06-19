@@ -258,7 +258,11 @@ function CarriedGarment({ found, total, phase, washP }) {
     return out;
   }, []);
 
-  const visible = phase !== "drying" && phase !== "done";
+  // Only carry the 3D garment once it's WHOLE — to the washer + through washing.
+  // During gather the assembly lives in the corner HUD panel; while drying/done it
+  // hangs on the line (HungGarment). So the avatar only physically carries the
+  // finished garment to the laundry.
+  const visible = phase === "toWasher" || phase === "washing" || phase === "toPeg";
   const cleaned = phase === "washing" || phase === "toPeg" || phase === "drying" || phase === "done";
 
   useFrame((state, dt) => {

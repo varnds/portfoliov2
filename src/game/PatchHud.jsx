@@ -18,6 +18,7 @@ import {
   startWashing,
   startDrying,
   setHolding,
+  PATCH_COLORS,
 } from "./patchStore";
 
 const ACCENT = "#E2725B";
@@ -161,56 +162,19 @@ export function PatchHud() {
           to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
         }
         @keyframes patchScrimIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes patchSlotPop {
+          0%   { transform: scale(0.4); opacity: 0; }
+          60%  { transform: scale(1.18); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes patchPanelIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
         @media (prefers-reduced-motion: reduce) {
           .patch-anim { animation-duration: 0.001s !important; animation-delay: 0s !important; }
         }
       `}</style>
-
-      {/* ── GATHER tally (top-center): a quiet "X of N patches found". No directions,
-          no waypoints — just a warm running count. The number pulses each time it
-          climbs (keyed on `found`). ── */}
-      {phase === "gather" && (
-        <div
-          className="patch-anim"
-          role="status"
-          aria-live="polite"
-          style={{
-            position: "absolute",
-            top: 40,
-            left: "50%",
-            transform: "translateX(-50%)",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 20px",
-            borderRadius: 999,
-            background: "rgba(255,253,247,0.94)",
-            border: `1.5px solid ${ACCENT}`,
-            boxShadow: "0 8px 22px rgba(58,42,32,0.28)",
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: 15,
-            color: SUBINK,
-            animation: "patchTallyIn 0.5s ease both",
-          }}
-        >
-          <BirdFace />
-          <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
-            <span
-              key={found}
-              style={{
-                display: "inline-block",
-                fontWeight: 700,
-                fontSize: 18,
-                color: INK,
-                animation: "patchCountPulse 0.5s cubic-bezier(0.2,0.7,0.3,1) both",
-              }}
-            >
-              {found}
-            </span>
-            <span>of {total} patches found</span>
-          </span>
-        </div>
-      )}
 
       {/* ── "The garment is whole!" beat (top-center, golden) the moment the last
           patch lands and we flip into toWasher. ── */}
@@ -260,6 +224,13 @@ export function PatchHud() {
             The garment is whole!
           </div>
         </div>
+      )}
+
+      {/* ── The garment "assembly board" in the bottom-right corner: a framed 2×3
+          grid that fills in patch-by-patch as you discover them, so you can always
+          see the garment coming together. Shown while gathering + the whole beat. ── */}
+      {(phase === "gather" || phase === "toWasher") && (
+        <AssemblyPanel found={found} total={total} />
       )}
 
       {/* ── Bottom-center caption (frosted card with the bird face) — the same look
@@ -351,6 +322,70 @@ export function PatchHud() {
 
       {/* ── Completion banner ── */}
       {phase === "done" && <DoneBanner />}
+    </div>
+  );
+}
+
+// The corner "assembly board": a framed 2×3 grid of the garment's patch slots.
+// Empty slots read as faint dashed recesses; each fills with its patch's colour
+// (with a little pop) as that patch is discovered — so the garment visibly comes
+// together in the corner instead of floating on the avatar.
+function AssemblyPanel({ found, total }) {
+  return (
+    <div
+      className="patch-anim"
+      style={{
+        position: "absolute",
+        right: 22,
+        bottom: 22,
+        padding: 12,
+        borderRadius: 14,
+        background: "rgba(255,253,247,0.94)",
+        border: `1.5px solid ${ACCENT}`,
+        boxShadow: "0 8px 22px rgba(58,42,32,0.28)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        animation: "patchPanelIn 0.5s ease both",
+      }}
+    >
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: SUBINK }}>
+        Your garment
+      </div>
+      {/* the stitched binding frames the grid of slots */}
+      <div
+        style={{
+          padding: 6,
+          background: "#7A5E3C",
+          borderRadius: 7,
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 4,
+          boxShadow: "inset 0 1px 3px rgba(0,0,0,0.25)",
+        }}
+      >
+        {PATCH_COLORS.map((c, i) => {
+          const filled = found > i;
+          return (
+            <div
+              key={i}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 4,
+                background: filled ? c : "rgba(176,150,111,0.45)",
+                border: filled ? "none" : "1.5px dashed rgba(255,255,255,0.45)",
+                boxShadow: filled ? "inset 0 1px 2px rgba(255,255,255,0.35)" : "none",
+                animation: filled ? "patchSlotPop 0.4s cubic-bezier(0.2,0.7,0.3,1) both" : "none",
+              }}
+            />
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: INK }}>
+        {found} / {total}
+      </div>
     </div>
   );
 }

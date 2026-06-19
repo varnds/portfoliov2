@@ -25,6 +25,8 @@ import { useSyncExternalStore } from "react";
 import { sfx } from "./audio";
 
 export const PATCH_TOTAL = 6; // how many patches make a whole garment
+// The 6 patch colours (shared by the in-world scraps + the corner assembly panel).
+export const PATCH_COLORS = ["#E2725B", "#E0A458", "#6FA8A0", "#8C7BD9", "#D96BA0", "#C9A24B"];
 export const WASH_TIME = 4.0; // seconds of holding to finish a wash
 export const DRY_TIME = 5.0; // seconds of holding to finish drying
 
