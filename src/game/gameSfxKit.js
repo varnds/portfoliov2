@@ -206,20 +206,22 @@ export function createSfx(ctx, dest) {
   function footstep() {
     try {
       const t0 = now() + 0.001;
-      // A short burst of lowpass noise (the scuff) + a soft low body thump.
-      const dur = rand(0.05, 0.08);
-      const lp = warmLowpass(t0, rand(420, 620), 0.9, 400);
+      // A soft, warm SAND footfall: a gentle crunch of low-passed noise (no bright
+      // "tss" click — low cutoff + a soft attack) over a rounded low body thud.
+      const dur = rand(0.11, 0.16); // a soft crunch, not a tick
+      const lp = warmLowpass(t0, rand(280, 440), 0.6, 400); // warm + sandy, no highs
       const src = ctx.createBufferSource();
       src.buffer = getNoiseBuffer();
-      // random start offset into the noise for variation
-      const off = Math.random() * 0.5;
+      const off = Math.random() * 0.5; // vary which slice of noise
+      try {
+        src.playbackRate.setValueAtTime(rand(0.78, 1.12), t0); // vary the timbre/pitch
+      } catch {
+        /* best-effort */
+      }
       const g = makeGain(lp);
-      // scuff + body thump overlap; each near T_FAINT summed to ~0.083 (≈2× tier)
-      // for a constantly-firing sound. Pull the scuff to ~0.55× so the pair lands
-      // near T_FAINT and footsteps stay genuinely faint.
-      const peak = T_FAINT * rand(0.45, 0.6);
+      const peak = T_FAINT * rand(0.7, 1.0);
       g.gain.setValueAtTime(FLOOR, t0);
-      g.gain.linearRampToValueAtTime(peak, t0 + 0.006);
+      g.gain.linearRampToValueAtTime(peak, t0 + rand(0.014, 0.022)); // soft attack → no click
       g.gain.exponentialRampToValueAtTime(FLOOR, t0 + dur);
       src.connect(g);
       src.start(t0, off, dur + 0.05);
@@ -233,15 +235,15 @@ export function createSfx(ctx, dest) {
       };
       disconnectAfter(src, t0 + dur + 0.1);
       disconnectAfter(g, t0 + dur + 0.1);
-      // soft rounded body thump, pitch jittered so steps don't sound robotic
+      // soft rounded body thud (the heel), pitch jittered so steps aren't robotic
       tone({
         type: "sine",
-        freq: rand(95, 130),
-        freqEnd: rand(60, 80),
+        freq: rand(80, 102),
+        freqEnd: rand(52, 66),
         t0,
-        attack: 0.006,
-        peak: T_FAINT * rand(0.6, 0.8), // trimmed so scuff+thump ≈ T_FAINT total
-        release: rand(0.07, 0.1),
+        attack: 0.01,
+        peak: T_FAINT * rand(0.5, 0.7),
+        release: rand(0.08, 0.12),
       });
     } catch {
       /* never throw */

@@ -352,7 +352,6 @@ export function FootstepEffects({ seasonKey }) {
       emitScuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, 1 + fast * 0.4);
       emitPuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ, 1 + fast * 0.6, 1);
       emitPrint(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ);
-      sfx.footstep(); // a soft footfall per step (self-varying so it never feels robotic)
     }
 
     // ── Water: a gentle splash the moment you step into the pond ──────────────

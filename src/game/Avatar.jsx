@@ -112,6 +112,8 @@ function AvatarModel({ cfg, motion }) {
   const { scene, animations } = useGLTF(cfg.url);
   const { actions, names } = useAnimations(animations, rigRef);
   const curAction = useRef(null);
+  const stepHalf = useRef(-1); // clip avatars: walk-cycle half, for foot-plant edges
+  const stepSign = useRef(0); // clipless avatars: bob-sine sign, for foot-down edges
 
   const clips = useMemo(
     () => ({
@@ -224,6 +226,7 @@ function AvatarModel({ cfg, motion }) {
       }
       // sync locomotion playback to ground speed (no foot-sliding)
       const cur = curAction.current && actions[curAction.current];
+      const onFoot = curAction.current === clips.walk || curAction.current === clips.run;
       if (cur) {
         if (want === clips.walk || want === clips.run) {
           const ref = want === clips.run ? RUN_REF : WALK_REF;
@@ -232,16 +235,40 @@ function AvatarModel({ cfg, motion }) {
           cur.setEffectiveTimeScale(1);
         }
       }
+      // Footstep SOUND locked to the actual walk/run animation (two foot-plants per
+      // cycle) so it stays in sync with the legs at ANY speed — not a distance guess.
+      if (moving && onFoot && cur && cur.getClip) {
+        const dur = cur.getClip().duration || 0;
+        if (dur > 0) {
+          const phase = (((cur.time % dur) + dur) % dur) / dur; // 0..1 through the cycle
+          const half = phase < 0.5 ? 0 : 1;
+          if (half !== stepHalf.current) {
+            sfx.footstep();
+            stepHalf.current = half;
+          }
+        }
+      } else {
+        stepHalf.current = -1;
+      }
       if (rigRef.current) rigRef.current.position.y = 0;
     } else if (rigRef.current) {
       // procedural fallback for clipless models (chicken, banana)
       const t = state.clock.elapsedTime;
       if (moving) {
-        rigRef.current.position.y = Math.abs(Math.sin(t * (running ? 13 : 9))) * 0.12;
+        const bob = Math.sin(t * (running ? 13 : 9));
+        rigRef.current.position.y = Math.abs(bob) * 0.12;
         rigRef.current.rotation.x = -0.1;
+        // foot-down = the bottom of the bob (abs(sin)=0 → sine zero-crossing): play
+        // the footstep on each sign flip so it's locked to the visible bounce.
+        const sign = bob >= 0 ? 1 : -1;
+        if (sign !== stepSign.current) {
+          sfx.footstep();
+          stepSign.current = sign;
+        }
       } else {
         rigRef.current.position.y = Math.sin(t * 2) * 0.03;
         rigRef.current.rotation.x = 0;
+        stepSign.current = 0;
       }
     }
   });
