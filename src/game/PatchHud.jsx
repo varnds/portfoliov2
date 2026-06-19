@@ -171,6 +171,42 @@ export function PatchHud() {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        /* a new patch DROPS into its hole and settles with an overshoot bounce */
+        @keyframes patchTileIn {
+          0%   { transform: translateY(-34px) scale(0.35) rotate(-14deg); opacity: 0; }
+          45%  { opacity: 1; }
+          60%  { transform: translateY(4px) scale(1.22) rotate(5deg); }
+          78%  { transform: translateY(0) scale(0.92) rotate(-2deg); }
+          100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+        }
+        /* the stitching draws itself around the freshly-attached patch */
+        @keyframes patchStitchDraw {
+          0%   { opacity: 0; transform: scale(1.35); }
+          55%  { opacity: 0; }
+          70%  { opacity: 1; }
+          100% { opacity: 0.9; transform: scale(1); }
+        }
+        /* a warm ring bursts off the whole board so your eye snaps to it */
+        @keyframes patchGlowBurst {
+          0%   { opacity: 0.9; transform: scale(0.96); }
+          100% { opacity: 0; transform: scale(1.14); }
+        }
+        /* the board gives a happy little nudge on each new patch */
+        @keyframes patchBoardNudge {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          35%      { transform: scale(1.06) rotate(-1.2deg); }
+          70%      { transform: scale(0.99) rotate(0.6deg); }
+        }
+        @keyframes patchCountBump {
+          0%   { transform: scale(1); color: ${INK}; }
+          45%  { transform: scale(1.4); color: ${ACCENT}; }
+          100% { transform: scale(1); color: ${INK}; }
+        }
+        /* final flourish when the last patch lands and the garment is whole */
+        @keyframes patchWholeGlow {
+          0%, 100% { box-shadow: 0 8px 22px rgba(58,42,32,0.28); }
+          50%      { box-shadow: 0 0 0 3px ${GOLD}, 0 8px 28px rgba(231,179,106,0.6); }
+        }
         @media (prefers-reduced-motion: reduce) {
           .patch-anim { animation-duration: 0.001s !important; animation-delay: 0s !important; }
         }
@@ -331,59 +367,113 @@ export function PatchHud() {
 // (with a little pop) as that patch is discovered — so the garment visibly comes
 // together in the corner instead of floating on the avatar.
 function AssemblyPanel({ found, total }) {
+  const whole = found >= total;
   return (
     <div
-      className="patch-anim"
+      // keyed on `found` so the board replays its happy nudge each time a patch
+      // lands — which (with the glow burst below) makes your eye snap to it.
+      key={`board-${found}`}
       style={{
         position: "absolute",
         right: 22,
         bottom: 22,
         padding: 12,
         borderRadius: 14,
-        background: "rgba(255,253,247,0.94)",
-        border: `1.5px solid ${ACCENT}`,
+        background: "rgba(255,253,247,0.96)",
+        border: `1.5px solid ${whole ? GOLD : ACCENT}`,
         boxShadow: "0 8px 22px rgba(58,42,32,0.28)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 8,
-        animation: "patchPanelIn 0.5s ease both",
+        gap: 9,
+        animation:
+          found === 0
+            ? "patchPanelIn 0.5s ease both"
+            : whole
+            ? "patchBoardNudge 0.6s ease both, patchWholeGlow 1.1s ease 0.2s 2"
+            : "patchBoardNudge 0.55s ease both",
       }}
     >
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: SUBINK }}>
-        Your garment
+      {/* warm ring that bursts off the board on each new patch (eye-catcher) */}
+      {found > 0 && (
+        <div
+          key={`burst-${found}`}
+          style={{
+            position: "absolute",
+            inset: -5,
+            borderRadius: 18,
+            boxShadow: `0 0 0 2.5px ${whole ? GOLD : ACCENT}`,
+            animation: "patchGlowBurst 0.6s ease-out both",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: whole ? "#B8902F" : SUBINK }}>
+        {whole ? "Whole again" : "Your garment"}
       </div>
-      {/* the stitched binding frames the grid of slots */}
+
+      {/* the stitched binding frames the patch holes */}
       <div
         style={{
+          position: "relative",
           padding: 6,
-          background: "#7A5E3C",
-          borderRadius: 7,
+          background: "#6E5436",
+          borderRadius: 8,
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 4,
-          boxShadow: "inset 0 1px 3px rgba(0,0,0,0.25)",
+          gap: 5,
+          boxShadow: "inset 0 1px 4px rgba(0,0,0,0.35)",
         }}
       >
         {PATCH_COLORS.map((c, i) => {
           const filled = found > i;
           return (
+            // key includes `filled` so ONLY the patch that just landed remounts +
+            // plays its drop-in animation; already-placed patches stay put.
             <div
-              key={i}
+              key={`cell-${i}-${filled}`}
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 4,
-                background: filled ? c : "rgba(176,150,111,0.45)",
-                border: filled ? "none" : "1.5px dashed rgba(255,255,255,0.45)",
-                boxShadow: filled ? "inset 0 1px 2px rgba(255,255,255,0.35)" : "none",
-                animation: filled ? "patchSlotPop 0.4s cubic-bezier(0.2,0.7,0.3,1) both" : "none",
+                position: "relative",
+                width: 40,
+                height: 40,
+                borderRadius: 5,
+                // empty = a dark TORN hole in the garment; filled = a vivid patch
+                background: filled ? c : "rgba(28,18,12,0.5)",
+                border: filled ? "1.5px solid rgba(255,255,255,0.28)" : "1.5px dashed rgba(214,196,170,0.4)",
+                boxShadow: filled
+                  ? "inset 0 1px 3px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.25)"
+                  : "inset 0 2px 5px rgba(0,0,0,0.45)",
+                animation: filled ? "patchTileIn 0.55s cubic-bezier(0.34,1.56,0.5,1) both" : "none",
               }}
-            />
+            >
+              {/* the stitching that draws itself around a freshly-attached patch */}
+              {filled && (
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: 3,
+                    borderRadius: 3,
+                    border: "1.5px dashed rgba(255,255,255,0.65)",
+                    animation: "patchStitchDraw 0.7s ease both",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: INK }}>
+
+      <div
+        key={`count-${found}`}
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: INK,
+          animation: found > 0 ? "patchCountBump 0.5s cubic-bezier(0.2,0.7,0.3,1) both" : "none",
+        }}
+      >
         {found} / {total}
       </div>
     </div>
