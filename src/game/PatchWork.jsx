@@ -44,8 +44,8 @@ import { sfx } from "./audio";
 import { WanderBird } from "./WanderBird";
 
 // ── Tuning ──────────────────────────────────────────────────────────────────────
-const DISCOVER_RANGE = 2.0; // horizontal distance at which a patch is discovered
-const PATCH_W = 0.45; // scrap world size
+const DISCOVER_RANGE = 2.8; // horizontal distance at which a patch is discovered
+const PATCH_W = 0.7; // scrap world size — big enough to spot when you're in the area
 const PATCH_LIFT = 0.07; // small lift so it rests cleanly above grass tufts
 const FLY_TIME = 0.85; // seconds for the found-patch zip-to-garment animation
 
@@ -53,12 +53,12 @@ const FLY_TIME = 0.85; // seconds for the found-patch zip-to-garment animation
 // and away from the flat clothesline yard near origin. Each gets its own warm
 // garment colour and a concealing prop kind ("rock" | "bush").
 const PATCH_DEFS = [
-  { id: 0, xz: [-24, 10], color: "#E2725B", prop: "rock" }, // pond's far shore
-  { id: 1, xz: [-4, -14], color: "#E0A458", prop: "bush" }, // back-hill rise
-  { id: 2, xz: [13, 14], color: "#6FA8A0", prop: "bush" }, // beside the tent/camp
-  { id: 3, xz: [-9, -3], color: "#8C7BD9", prop: "rock" }, // behind left line post
-  { id: 4, xz: [20, 2], color: "#D96BA0", prop: "rock" }, // rocky outcrop east
-  { id: 5, xz: [-22, -6], color: "#C9A24B", prop: "bush" }, // far SW corner
+  { id: 0, xz: [-12, 4], color: "#E2725B", prop: "rock" }, // west, toward the pond shore
+  { id: 1, xz: [-3, -12], color: "#E0A458", prop: "bush" }, // back-hill rise
+  { id: 2, xz: [12, 10], color: "#6FA8A0", prop: "rock" }, // beside the tent/camp
+  { id: 3, xz: [-8, -4], color: "#8C7BD9", prop: "bush" }, // behind the left line post
+  { id: 4, xz: [15, -3], color: "#D96BA0", prop: "rock" }, // east outcrop
+  { id: 5, xz: [5, 6], color: "#C9A24B", prop: "bush" }, // near the yard's right side
 ];
 
 // Garment-assembly grid: 2 columns × 3 rows = 6 squares. Patch i fills cell i so
@@ -90,30 +90,37 @@ const PATCHES = PATCH_DEFS.map((d) => {
 // ─────────────────────────────────────────────────────────────────────────────
 function ConcealProp({ kind, color }) {
   if (kind === "rock") {
+    // a chunky little boulder cluster — a clear landmark to explore toward, with
+    // the patch snagged against it.
     return (
       <group>
-        <mesh castShadow receiveShadow position={[0.22, 0.12, -0.04]} rotation={[0.3, 0.6, 0.15]}>
-          <dodecahedronGeometry args={[0.26, 0]} />
+        <mesh castShadow receiveShadow position={[0.3, 0.26, -0.05]} rotation={[0.3, 0.6, 0.15]}>
+          <dodecahedronGeometry args={[0.5, 0]} />
           <meshStandardMaterial color="#8C8579" roughness={1} metalness={0} flatShading />
         </mesh>
-        <mesh castShadow position={[0.06, 0.07, 0.18]} rotation={[0.5, 1.2, 0]}>
-          <dodecahedronGeometry args={[0.15, 0]} />
+        <mesh castShadow receiveShadow position={[0.0, 0.15, 0.28]} rotation={[0.5, 1.2, 0]}>
+          <dodecahedronGeometry args={[0.3, 0]} />
           <meshStandardMaterial color="#9C958A" roughness={1} metalness={0} flatShading />
+        </mesh>
+        <mesh castShadow position={[-0.3, 0.1, -0.02]} rotation={[0.2, 2.1, 0.4]}>
+          <dodecahedronGeometry args={[0.22, 0]} />
+          <meshStandardMaterial color="#7E776B" roughness={1} metalness={0} flatShading />
         </mesh>
       </group>
     );
   }
-  // bush / grass tuft — a few low leafy blades partly hiding the scrap.
+  // a fuller shrub — a few leafy blades the scrap drapes over.
   return (
     <group>
       {[
-        [0.2, 0, 0.0, 0.0],
-        [0.26, 0.3, 0.1, 0.5],
-        [0.12, -0.4, 0.2, -0.3],
-        [0.3, 0.9, -0.08, 0.2],
-      ].map(([x, ry, z, tilt], i) => (
-        <mesh key={i} castShadow position={[x, 0.16, z]} rotation={[tilt, ry, tilt * 0.5]}>
-          <coneGeometry args={[0.12, 0.34, 5]} />
+        [0.3, 0, 0.0, 0.0, 0.6],
+        [0.4, 0.3, 0.15, 0.4, 0.52],
+        [0.18, -0.4, 0.3, -0.25, 0.46],
+        [0.46, 0.9, -0.12, 0.18, 0.5],
+        [0.1, 1.6, -0.18, -0.1, 0.42],
+      ].map(([x, ry, z, tilt, h], i) => (
+        <mesh key={i} castShadow position={[x, h * 0.5, z]} rotation={[tilt, ry, tilt * 0.5]}>
+          <coneGeometry args={[0.18, h, 5]} />
           <meshStandardMaterial color={i % 2 ? "#6E8F4E" : "#7CA05A"} roughness={1} metalness={0} flatShading />
         </mesh>
       ))}
@@ -187,13 +194,14 @@ function HiddenPatch({ def, found }) {
         const bx = base[o];
         const by = base[o + 1];
         const w = vWeight[k];
-        // it lies flat (rotated by the parent), so "z" of the panel buckles upward
+        // draped upright now → it ripples toward/away (z) + sways a touch, more at
+        // the free hem (w→1), so it reads as a little rag flapping in the breeze.
         const flutter =
-          Math.sin(bx * 14 + t * 1.6 + def.id) * 0.012 +
-          Math.sin(by * 10 - t * 1.2 + def.id * 1.3) * 0.016;
-        arr[o] = bx;
+          Math.sin(bx * 12 + t * 2.2 + def.id) * 0.03 +
+          Math.sin(by * 9 - t * 1.7 + def.id * 1.3) * 0.04;
+        arr[o] = bx + Math.sin(by * 7 + t * 1.5 + def.id) * 0.02 * w;
         arr[o + 1] = by;
-        arr[o + 2] = flutter * (0.4 + w) * gust;
+        arr[o + 2] = flutter * (0.5 + w) * gust;
       }
       cloth.geometry.attributes.position.needsUpdate = true;
       cloth.geometry.computeVertexNormals();
@@ -203,12 +211,19 @@ function HiddenPatch({ def, found }) {
   return (
     <group ref={group} position={[def.pos.x, def.pos.y, def.pos.z]}>
       <ConcealProp kind={def.prop} color={def.color} />
-      {/* the scrap, laid flat on the ground beside the prop */}
-      <group rotation={[-Math.PI / 2, 0, 0]} position={[-0.18, 0.02, 0.22]}>
+      {/* the scrap, snagged on the prop + fluttering — draped UPRIGHT so you can
+          spot it from a distance (not flat on the sand). A pale raw-fabric backing
+          gives it a soft light edge that pops a touch from the terrain — it's
+          cloth caught on a rock, not a glowing marker. */}
+      <group position={[0.15, 0.78, 0.1]} rotation={[0.22, 0.55, 0.12]}>
+        <mesh position={[0, -PATCH_W * 0.5, -0.015]}>
+          <planeGeometry args={[PATCH_W * 1.12, PATCH_W * 1.08]} />
+          <meshStandardMaterial color="#F3E8CF" roughness={1} metalness={0} side={THREE.DoubleSide} flatShading />
+        </mesh>
         <mesh ref={clothRef} geometry={panel.geometry} castShadow receiveShadow>
           <meshStandardMaterial
             color={def.color}
-            roughness={0.95}
+            roughness={0.92}
             metalness={0}
             side={THREE.DoubleSide}
             flatShading
@@ -216,8 +231,8 @@ function HiddenPatch({ def, found }) {
         </mesh>
       </group>
       {/* tiny brief sparkle that flashes only during the fly-to-garment moment */}
-      <mesh ref={sparkleRef} visible={false} position={[0, 0.2, 0]}>
-        <sphereGeometry args={[0.3, 10, 10]} />
+      <mesh ref={sparkleRef} visible={false} position={[0, 0.6, 0]}>
+        <sphereGeometry args={[0.34, 10, 10]} />
         <meshBasicMaterial color="#FFF3D6" transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>
