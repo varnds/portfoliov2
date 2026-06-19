@@ -16,7 +16,8 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { avatarPos, avatarActive } from "./gameStore";
-import { terrainHeight } from "../scene3d/coords";
+import { sfx } from "./audio";
+import { terrainHeight, POND_X, POND_Z, POND_RADIUS } from "../scene3d/coords";
 import { makeRadialTexture } from "../scene3d/particleUtils";
 
 // Crisp little grain: a small dot with a hard-ish core and a thin feather, so a
@@ -233,6 +234,7 @@ export function FootstepEffects({ seasonKey }) {
   const scuffCursor = useRef(0);
   const wasAir = useRef(false);
   const wasActive = useRef(false);
+  const wasInWater = useRef(false);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
@@ -350,7 +352,13 @@ export function FootstepEffects({ seasonKey }) {
       emitScuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, 1 + fast * 0.4);
       emitPuff(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ, 1 + fast * 0.6, 1);
       emitPrint(fx, avatarPos.x + ox, avatarPos.z + oz, groundY, dirX, dirZ);
+      sfx.footstep(); // a soft footfall per step (self-varying so it never feels robotic)
     }
+
+    // ── Water: a gentle splash the moment you step into the pond ──────────────
+    const inWater = Math.hypot(avatarPos.x - POND_X, avatarPos.z - POND_Z) < POND_RADIUS - 1;
+    if (inWater && !wasInWater.current) sfx.splash();
+    wasInWater.current = inWater;
   });
 
   function emitPuff(fx, x, z, groundY, dirX, dirZ, mult, lifeMult) {

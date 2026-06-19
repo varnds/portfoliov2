@@ -118,6 +118,7 @@ export function audioSetPlaying(on) {
   else {
     stopMusic();
     audioWasherStop();
+    audioFanStop();
   }
 }
 
@@ -156,12 +157,18 @@ const call = (fn, ...args) => {
   }
 };
 export const sfx = {
+  footstep: () => call("footstep"),
   drop: (style) => call("drop", style),
+  die: () => call("die"),
+  caught: () => call("caught"),
+  splash: () => call("splash"),
   birdChirp: () => call("birdChirp"),
   pickup: () => call("pickup"),
   load: () => call("load"),
   hang: () => call("hang"),
   sockFound: () => call("sockFound"),
+  gameStart: () => call("gameStart"),
+  gameEnd: () => call("gameEnd"),
 };
 
 export function audioWasherStart() {
@@ -176,6 +183,21 @@ export function audioWasherStop() {
 }
 export function audioWasherIntensity(x) {
   call("washerSetIntensity", x);
+}
+
+let fanOn = false;
+export function audioFanStart() {
+  if (fanOn) return;
+  fanOn = true;
+  call("fanStart");
+}
+export function audioFanStop() {
+  if (!fanOn) return;
+  fanOn = false;
+  call("fanStop");
+}
+export function audioFanIntensity(x) {
+  call("fanSetIntensity", x);
 }
 // While the washer runs, gently swell the music too.
 export function audioMusicIntensity(x) {

@@ -100,8 +100,10 @@ export function addWash(amt) {
 export function addDry(amt) {
   if (s.phase !== "drying") return;
   const dryP = Math.min(1, s.dryP + amt);
-  s = { ...s, dryP, ...(dryP >= 1 ? { phase: "done", holding: false } : null) };
+  const finished = dryP >= 1;
+  s = { ...s, dryP, ...(finished ? { phase: "done", holding: false } : null) };
   emit();
+  if (finished) sfx.gameEnd(); // the line is complete — a happy finish flourish
 }
 
 export function useWash() {

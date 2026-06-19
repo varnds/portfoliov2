@@ -55,6 +55,8 @@ import {
   audioWasherStop,
   audioWasherIntensity,
   audioMusicIntensity,
+  audioFanStart,
+  audioFanStop,
 } from "./audio";
 
 // ── World anchors ─────────────────────────────────────────────────────────────
@@ -856,6 +858,14 @@ export function WashDay() {
   phaseRef.current = phase;
   const holdingRef = useRef(holding);
   holdingRef.current = holding;
+
+  // Fan/breeze SOUND while you hold to fan the cloth dry; stop the moment you let
+  // go, leave drying, or the mode unmounts.
+  useEffect(() => {
+    if (phase === "drying" && holding) audioFanStart();
+    else audioFanStop();
+  }, [phase, holding]);
+  useEffect(() => () => audioFanStop(), []);
 
   // Reset positions/phase when a fresh wash run begins (playing flips true).
   useEffect(() => {

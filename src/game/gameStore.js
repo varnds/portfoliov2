@@ -13,6 +13,7 @@
 import { useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { DEFAULT_AVATAR } from "./avatarConfig";
+import { sfx, audioUnlock } from "./audio";
 
 // ── Non-reactive shared state ────────────────────────────────────────────────
 export const avatarPos = new THREE.Vector3(0, 0, 0);
@@ -172,6 +173,8 @@ export function startGame() {
     nearTarget: null,
   };
   emit();
+  audioUnlock(); // the Play click is a user gesture — unlock audio + a start chime
+  sfx.gameStart();
 }
 
 /** Switch which game is active (only meaningful from the hero / not playing). */
@@ -189,6 +192,8 @@ export function hitPlayer() {
   chase.dead = dead;
   state = { ...state, hits, dead };
   emit();
+  if (dead) sfx.die();
+  else sfx.caught();
 }
 
 /** Chase: freeze the world while the player reads an artifact reveal. */
@@ -278,8 +283,10 @@ export function discover(id, reveal) {
   const truths = reveal ? [...state.truths, { id, ...reveal }] : state.truths;
   // win when every registered artifact has been found
   const won = registry.size > 0 && discovered.size >= registry.size;
+  const wasWon = state.won;
   state = { ...state, discovered, won, truths, activeReveal: reveal || null };
   emit();
+  if (won && !wasWon) sfx.gameEnd();
 }
 
 export function closeReveal() {

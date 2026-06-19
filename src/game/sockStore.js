@@ -11,6 +11,7 @@
  * AboutOverlay are read-only consumers.
  */
 import { useSyncExternalStore } from "react";
+import { sfx } from "./audio";
 
 export const SOCK_GOAL = 5;
 
@@ -41,6 +42,7 @@ export function resetSocks() {
 export function pickUpSock() {
   state = { ...state, carrying: state.carrying + 1 };
   emit();
+  sfx.pickup();
 }
 
 /** Avatar reached the basket while carrying → deposit everything carried. */
@@ -48,13 +50,11 @@ export function depositSocks() {
   if (state.carrying <= 0) return 0;
   const dropped = state.carrying;
   const inBasket = Math.min(SOCK_GOAL, state.inBasket + dropped);
-  state = {
-    ...state,
-    carrying: 0,
-    inBasket,
-    done: inBasket >= SOCK_GOAL,
-  };
+  const done = inBasket >= SOCK_GOAL;
+  state = { ...state, carrying: 0, inBasket, done };
   emit();
+  if (done) sfx.gameEnd(); // all five in → finish flourish
+  else sfx.load(); // a soft thunk as the socks drop into the basket
   return dropped;
 }
 
