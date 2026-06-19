@@ -206,26 +206,54 @@ export function createSfx(ctx, dest) {
   function footstep() {
     try {
       const t0 = now() + 0.001;
-      // A soft, warm SAND footfall: a gentle crunch of low-passed noise (no bright
-      // "tss" click — low cutoff + a soft attack) over a rounded low body thud.
-      const dur = rand(0.11, 0.16); // a soft crunch, not a tick
-      const lp = warmLowpass(t0, rand(280, 440), 0.6, 400); // warm + sandy, no highs
+      // Roblox-ish footfall: a light, slightly HOLLOW "tok-pat" tap — a short
+      // mid-pitched body tap (triangle pluck with a quick downward pitch bend, for
+      // that clean plastic-y hollow knock) + a tiny sub for weight + a soft mid-band
+      // noise "pat" on contact. Clean + cartoonish, NOT a sandy crunch. Pitch/level
+      // jittered each step so it never sounds robotic.
+      const base = rand(195, 280);
+      // body "tok" — the characteristic hollow tap
+      tone({
+        type: "triangle",
+        freq: base * rand(0.98, 1.05),
+        freqEnd: base * 0.66,
+        t0,
+        attack: 0.003,
+        peak: T_FAINT * rand(0.85, 1.05),
+        release: rand(0.07, 0.1),
+      });
+      // a quiet sub-octave for a touch of body/weight
+      tone({
+        type: "sine",
+        freq: base * 0.5,
+        freqEnd: base * 0.4,
+        t0,
+        attack: 0.004,
+        peak: T_FAINT * rand(0.28, 0.42),
+        release: rand(0.06, 0.09),
+      });
+      // soft surface "pat" tick — a short mid-band noise burst on contact
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(rand(950, 1500), t0);
+      bp.Q.setValueAtTime(0.9, t0);
+      bp.connect(dest);
+      disconnectAfter(bp, t0 + 0.12);
       const src = ctx.createBufferSource();
       src.buffer = getNoiseBuffer();
-      const off = Math.random() * 0.5; // vary which slice of noise
       try {
-        src.playbackRate.setValueAtTime(rand(0.78, 1.12), t0); // vary the timbre/pitch
+        src.playbackRate.setValueAtTime(rand(0.9, 1.15), t0);
       } catch {
         /* best-effort */
       }
-      const g = makeGain(lp);
-      const peak = T_FAINT * rand(0.7, 1.0);
+      const tickDur = rand(0.018, 0.03);
+      const g = makeGain(bp);
       g.gain.setValueAtTime(FLOOR, t0);
-      g.gain.linearRampToValueAtTime(peak, t0 + rand(0.014, 0.022)); // soft attack → no click
-      g.gain.exponentialRampToValueAtTime(FLOOR, t0 + dur);
+      g.gain.linearRampToValueAtTime(T_FAINT * rand(0.32, 0.46), t0 + 0.004);
+      g.gain.exponentialRampToValueAtTime(FLOOR, t0 + tickDur);
       src.connect(g);
-      src.start(t0, off, dur + 0.05);
-      src.stop(t0 + dur + 0.05);
+      src.start(t0, Math.random() * 0.5, tickDur + 0.05);
+      src.stop(t0 + tickDur + 0.05);
       src.onended = () => {
         try {
           src.disconnect();
@@ -233,18 +261,8 @@ export function createSfx(ctx, dest) {
           /* gone */
         }
       };
-      disconnectAfter(src, t0 + dur + 0.1);
-      disconnectAfter(g, t0 + dur + 0.1);
-      // soft rounded body thud (the heel), pitch jittered so steps aren't robotic
-      tone({
-        type: "sine",
-        freq: rand(80, 102),
-        freqEnd: rand(52, 66),
-        t0,
-        attack: 0.01,
-        peak: T_FAINT * rand(0.5, 0.7),
-        release: rand(0.08, 0.12),
-      });
+      disconnectAfter(src, t0 + tickDur + 0.1);
+      disconnectAfter(g, t0 + tickDur + 0.1);
     } catch {
       /* never throw */
     }
