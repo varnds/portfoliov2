@@ -10,6 +10,7 @@ const MODES = [
   { id: "socks", label: "🧦 Socks" },
   { id: "camera", label: "📷 Camera" },
   { id: "wash", label: "🧺 Wash Day" },
+  { id: "patch", label: "🧵 Patchwork" },
 ];
 
 export function ModeSelector({ visible }) {

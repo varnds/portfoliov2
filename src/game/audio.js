@@ -12,6 +12,7 @@ import { useSyncExternalStore } from "react";
 import { createSfx } from "./gameSfxKit";
 import { MUSIC_VARIANTS } from "./musicVariants";
 import { createAirOnGString } from "./music/airOnGString";
+import { createReminiscenze } from "./music/reminiscenze";
 
 // ── Reactive UI state (sound on/off + chosen music variant) ──────────────────
 let state = { soundOn: true, variant: "lounge" };
@@ -74,11 +75,13 @@ function variantById(id) {
 function startMusic() {
   if (!ctx || music || !unlocked || !state.soundOn || !playing) return;
   try {
-    // Wash Day plays Bach's Air on the G String; other modes use the chosen
-    // procedural variant.
+    // Per-mode soundtrack: Wash Day → Bach's Air on the G String; Chase → the 1920
+    // "Reminiscenze" strings; other modes → the chosen procedural variant.
     music =
       (mode === "wash"
         ? createAirOnGString(ctx, musicBus)
+        : mode === "chase"
+        ? createReminiscenze(ctx, musicBus)
         : variantById(state.variant).create(ctx, musicBus)) || null;
   } catch {
     music = null;
@@ -184,6 +187,8 @@ export const sfx = {
   load: () => call("load"),
   hang: () => call("hang"),
   sockFound: () => call("sockFound"),
+  patchFound: () => call("patchFound"),
+  stitch: () => call("stitch"),
   gameStart: () => call("gameStart"),
   gameEnd: () => call("gameEnd"),
 };

@@ -79,6 +79,8 @@ export function createSfx(ctx, dest) {
       load: noop,
       hang: noop,
       sockFound: noop,
+      patchFound: noop,
+      stitch: noop,
       birdChirp: noop,
       gameStart: noop,
       gameEnd: noop,
@@ -667,6 +669,103 @@ export function createSfx(ctx, dest) {
   }
 
   // ========================================================================
+  // patchFound() — soft sparkly DISCOVERY chime when a hidden garment patch is
+  // found. Warm + delightful, in-palette. Peak ≈ T_MID (0.11). Fires once per
+  // patch (fairly often) so it's kept pleasant, never piercing.
+  // 3 ascending pentatonic bell/sine notes (E5 → A5 → C#6) routed warm, plus a
+  // tiny high shimmer (E6) on top for sparkle.
+  // ========================================================================
+  function patchFound() {
+    try {
+      const t0 = now() + 0.001;
+      const lp = warmLowpass(t0, 3200, 0.7, 900);
+      const bells = [N.E5, N.A5, N.Csharp6];
+      bells.forEach((f, i) => {
+        tone({
+          type: "sine",
+          freq: f,
+          t0: t0 + i * 0.06,
+          attack: 0.006,
+          peak: T_MID * 0.85 - i * 0.012, // gentle taper so the rising notes
+          release: 0.22, //                  barely overlap and sum under tier
+          target: lp,
+        });
+      });
+      // tiny high shimmer riding above the last bell for a little sparkle
+      tone({
+        type: "sine",
+        freq: N.E6,
+        t0: t0 + 0.12,
+        attack: 0.005,
+        peak: 0.035,
+        release: 0.18,
+        target: lp,
+      });
+    } catch {
+      /* never throw */
+    }
+  }
+
+  // ========================================================================
+  // stitch() — quick satisfying "needle + thread" when a patch stitches onto
+  // the carried garment. Peak ≈ T_MID (0.11), soft. Two-part gesture:
+  //   1) a tiny soft "tick" — a very short bandpass-noise blip (the needle),
+  //   2) immediately a brief pitched "pull" — a sine gliding between two
+  //      pentatonic notes (A4 → Csharp5, thread drawing taut), routed warm.
+  // ========================================================================
+  function stitch() {
+    try {
+      const t0 = now() + 0.001;
+      // 1) needle "tick" — short bandpass-noise blip
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(2200, t0);
+      bp.Q.setValueAtTime(1.4, t0);
+      bp.connect(dest);
+      disconnectAfter(bp, t0 + 0.06);
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer();
+      try {
+        src.playbackRate.setValueAtTime(rand(1.0, 1.2), t0);
+      } catch {
+        /* best-effort */
+      }
+      const tickDur = 0.022;
+      const g = makeGain(bp);
+      g.gain.setValueAtTime(FLOOR, t0);
+      g.gain.linearRampToValueAtTime(T_MID * 0.5, t0 + 0.003);
+      g.gain.exponentialRampToValueAtTime(FLOOR, t0 + tickDur);
+      src.connect(g);
+      src.start(t0, Math.random() * 0.4, tickDur + 0.05);
+      src.stop(t0 + tickDur + 0.05);
+      src.onended = () => {
+        try {
+          src.disconnect();
+        } catch {
+          /* gone */
+        }
+      };
+      disconnectAfter(src, t0 + tickDur + 0.1);
+      disconnectAfter(g, t0 + tickDur + 0.1);
+      // 2) thread "pull" — a brief sine gliding between two pentatonic notes,
+      // routed warm so the draw-taut tail stays soft.
+      const lp = warmLowpass(t0, 2000, 0.7, 260);
+      tone({
+        type: "sine",
+        freq: N.A4,
+        freqEnd: N.Csharp5,
+        t0: t0 + tickDur * 0.6,
+        attack: 0.006,
+        peak: T_MID * 0.7,
+        release: 0.12,
+        target: lp,
+      });
+    } catch {
+      /* never throw */
+    }
+  }
+
+  // ========================================================================
   // gameStart() — warm welcoming "here we go" chime. Peak ≈ T_LOUD (0.16).
   // Rising pentatonic A4-C#5-E5-A5 with a soft warm pad. Loudest tier.
   // ========================================================================
@@ -1098,6 +1197,8 @@ export function createSfx(ctx, dest) {
     load,
     hang,
     sockFound,
+    patchFound,
+    stitch,
     birdChirp,
     gameStart,
     gameEnd,

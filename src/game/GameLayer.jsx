@@ -12,6 +12,7 @@ import { ZombieChaser } from "./ZombieChaser";
 import { SockHunt } from "./SockHunt";
 import { CameraMode } from "./CameraMode";
 import { WashDay } from "./WashDay";
+import { PatchWork } from "./PatchWork";
 
 export function GameLayer({ seasonKey }) {
   const { playing, won, dead, gameMode } = useGame();
@@ -46,6 +47,7 @@ export function GameLayer({ seasonKey }) {
       {gameMode === "socks" && <SockHunt />}
       {gameMode === "camera" && <CameraMode />}
       {gameMode === "wash" && <WashDay />}
+      {gameMode === "patch" && <PatchWork />}
     </>
   );
 }

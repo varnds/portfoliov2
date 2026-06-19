@@ -73,6 +73,7 @@ import { SockHud } from "./game/SockHud";
 import { AboutOverlay } from "./game/AboutOverlay";
 import { CameraHud } from "./game/CameraHud";
 import { WashHud } from "./game/WashHud";
+import { PatchHud } from "./game/PatchHud";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const DISPLAY = "'Fraunces', serif";
@@ -3423,6 +3424,7 @@ export default function App() {
           {scene3D && introComplete && <SockHud />}
           {scene3D && introComplete && <AboutOverlay />}
           {scene3D && introComplete && <CameraHud />}
+          {scene3D && introComplete && <PatchHud />}
           {scene3D && introComplete && <WashHud />}
         </div>
 

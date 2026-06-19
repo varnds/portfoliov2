@@ -87,7 +87,7 @@ const SOCK_POS = new THREE.Vector3(SOCK_XZ[0], terrainHeight(SOCK_XZ[0], SOCK_XZ
 // Washing machine out by the camp TENT on the far right — this makes the tent the
 // "laundry camp", i.e. gives it a reason to be there.
 const WASHER_XZ = [10, 11];
-const WASHER_POS = new THREE.Vector3(
+export const WASHER_POS = new THREE.Vector3(
   WASHER_XZ[0],
   terrainHeight(WASHER_XZ[0], WASHER_XZ[1]),
   WASHER_XZ[1]
@@ -95,19 +95,19 @@ const WASHER_POS = new THREE.Vector3(
 // Face the washer's front (+Z local: door, drum, knobs) toward the way you walk
 // up to it — i.e. back toward the denim you're carrying from — so you always
 // approach its front, never its side/back.
-const WASHER_FACING = Math.atan2(SEEK_POS.x - WASHER_POS.x, SEEK_POS.z - WASHER_POS.z);
+export const WASHER_FACING = Math.atan2(SEEK_POS.x - WASHER_POS.x, SEEK_POS.z - WASHER_POS.z);
 
-const PEG_POS = new THREE.Vector3(PEG_POINT[0], PEG_POINT[1], PEG_POINT[2]);
+export const PEG_POS = new THREE.Vector3(PEG_POINT[0], PEG_POINT[1], PEG_POINT[2]);
 // The peg sits high up on the rope, so a prompt placed at the peg lands near the
 // top of the screen (you'd have to zoom out to see it). Instead anchor the peg
 // prompts at a fixed, visible height above the GROUND under the peg.
-const PEG_PROMPT_Y = terrainHeight(PEG_POS.x, PEG_POS.z) + 1.5;
+export const PEG_PROMPT_Y = terrainHeight(PEG_POS.x, PEG_POS.z) + 1.5;
 
 // Generous so standing ON the dropped garment always registers — the visible
 // cloth is laid ~0.85 off the SEEK_POS anchor and has its own size, so a tight
 // radius could miss you even while you're clearly on top of it.
 const PICKUP_RANGE = 2.6;
-const NEAR_RANGE = 2.4;
+export const NEAR_RANGE = 2.4;
 
 // Denim palette across the three states (the canvas art is tinted by lerping the
 // material color; the texture itself carries the seam/stitch detail in greys so
@@ -452,7 +452,7 @@ function DenimPanel({ state, p = 0, holding = false, hung = false, windBoost = 0
 // An approach-glow lights up when the carrier nears it.
 // ─────────────────────────────────────────────────────────────────────────────
 const SUDS_COUNT = 12;
-function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
+export function WashingMachine({ washing, washP, holding, glow, jacketInDrum }) {
   const shell = useRef();
   const drum = useRef();
   const jacket = useRef();
@@ -781,7 +781,7 @@ function HungPanel({ visible, dry, done, holding, celebrate }) {
 }
 
 // ── Floating keycap prompt, shown in-world right above the thing you can act on ──
-function KeyPrompt({ info }) {
+export function KeyPrompt({ info }) {
   if (!info) return null;
   const { pos, k, verb, hold, action } = info;
   const onDown = (e) => {
