@@ -13,7 +13,7 @@ import { createSfx } from "./gameSfxKit";
 import { MUSIC_VARIANTS } from "./musicVariants";
 
 // ── Reactive UI state (sound on/off + chosen music variant) ──────────────────
-let state = { soundOn: true, variant: "warm" };
+let state = { soundOn: true, variant: "lounge" };
 const listeners = new Set();
 function emit() {
   state = { ...state };
