@@ -4,7 +4,7 @@
  *  `gameMode`. */
 import React, { useEffect } from "react";
 import { useGame } from "./gameStore";
-import { installUnlock, audioSetPlaying } from "./audio";
+import { installUnlock, audioSetPlaying, audioSetMode } from "./audio";
 import { Avatar } from "./Avatar";
 import { Discoverables } from "./Discoverables";
 import { FootstepEffects } from "./FootstepEffects";
@@ -22,6 +22,10 @@ export function GameLayer({ seasonKey }) {
   useEffect(() => {
     installUnlock();
   }, []);
+  // Keep the music track in sync with the mode BEFORE play starts (Wash Day → Bach).
+  useEffect(() => {
+    audioSetMode(gameMode);
+  }, [gameMode]);
   useEffect(() => {
     audioSetPlaying(playing);
   }, [playing]);

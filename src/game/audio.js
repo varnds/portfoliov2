@@ -11,6 +11,7 @@
 import { useSyncExternalStore } from "react";
 import { createSfx } from "./gameSfxKit";
 import { MUSIC_VARIANTS } from "./musicVariants";
+import { createAirOnGString } from "./music/airOnGString";
 
 // ── Reactive UI state (sound on/off + chosen music variant) ──────────────────
 let state = { soundOn: true, variant: "lounge" };
@@ -38,6 +39,7 @@ let music = null;
 let unlocked = false;
 let playing = false;
 let washerOn = false;
+let mode = null; // current game mode — Wash Day gets the Bach track
 
 function ensureCtx() {
   if (ctx) return ctx;
@@ -72,9 +74,24 @@ function variantById(id) {
 function startMusic() {
   if (!ctx || music || !unlocked || !state.soundOn || !playing) return;
   try {
-    music = variantById(state.variant).create(ctx, musicBus) || null;
+    // Wash Day plays Bach's Air on the G String; other modes use the chosen
+    // procedural variant.
+    music =
+      (mode === "wash"
+        ? createAirOnGString(ctx, musicBus)
+        : variantById(state.variant).create(ctx, musicBus)) || null;
   } catch {
     music = null;
+  }
+}
+
+// Follow the active game mode — switching to/from Wash Day swaps the music track.
+export function audioSetMode(m) {
+  if (mode === m) return;
+  mode = m;
+  if (playing) {
+    stopMusic();
+    startMusic();
   }
 }
 function stopMusic() {
