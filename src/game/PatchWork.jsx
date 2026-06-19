@@ -71,9 +71,11 @@ const GRID_ROWS = 3;
 const _tmpColor = new THREE.Color();
 const _tmpColor2 = new THREE.Color();
 const _carryPos = new THREE.Vector3();
-const _ghostColor = new THREE.Color("#B7A98F"); // faint, unfilled garment outline
+const _ghostColor = new THREE.Color("#D9C7A6"); // raw muslin/canvas — the cloth body
 const _wholeColor = new THREE.Color("#FBF3E2"); // whole/washed garment body tint
 const _white = new THREE.Color("#ffffff");
+const _slotColor = new THREE.Color("#B0966F"); // an empty, un-filled patch slot (a hole)
+const _frameColor = new THREE.Color("#7A5E3C"); // the garment's stitched binding/edge
 
 // Precompute each patch's resting world position once.
 const PATCHES = PATCH_DEFS.map((d) => {
@@ -268,7 +270,7 @@ function CarriedGarment({ found, total, phase, washP }) {
 
     // bob just above + behind the avatar, facing roughly toward the camera (which
     // sits behind/above the avatar in this world) — we face -Z relative to avatar.
-    _carryPos.set(avatarPos.x - 0.05, avatarPos.y + 1.95 + Math.sin(t * 2.2) * 0.06, avatarPos.z + 0.55);
+    _carryPos.set(avatarPos.x - 0.05, avatarPos.y + 2.5 + Math.sin(t * 2.2) * 0.06, avatarPos.z + 0.5);
     g.position.copy(_carryPos);
     g.rotation.y = Math.PI + Math.sin(t * 0.5) * 0.12;
     g.rotation.z = Math.sin(t * 0.8) * 0.05;
@@ -278,10 +280,10 @@ function CarriedGarment({ found, total, phase, washP }) {
     if (bodyMat.current) {
       if (!whole) {
         _tmpColor.copy(_ghostColor);
-        bodyMat.current.opacity = 0.32;
+        bodyMat.current.opacity = 0.62;
       } else {
         _tmpColor.copy(_ghostColor).lerp(_wholeColor, cleaned ? 1 : 0.5);
-        bodyMat.current.opacity = cleaned ? 0.85 : 0.7;
+        bodyMat.current.opacity = cleaned ? 0.92 : 0.82;
       }
       bodyMat.current.color.copy(_tmpColor);
     }
@@ -309,25 +311,39 @@ function CarriedGarment({ found, total, phase, washP }) {
 
   return (
     <group ref={group} visible={false}>
-      {/* faint garment-shaped outline the patches fill into */}
+      {/* stitched binding / frame behind the cloth — reads as a deliberate
+          patchwork panel (a garment-in-progress), not a stray rectangle */}
+      <mesh position={[0, -0.65, -0.02]}>
+        <planeGeometry args={[1.16, 1.46]} />
+        <meshStandardMaterial color={_frameColor} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={0.85} depthWrite={false} />
+      </mesh>
+      {/* the cloth body (raw muslin) the patches stitch into */}
       <mesh geometry={panel.geometry}>
         <meshStandardMaterial
           ref={bodyMat}
           color={_ghostColor}
           transparent
-          opacity={0.32}
+          opacity={0.6}
           roughness={1}
           metalness={0}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
       </mesh>
-      {/* the assembling patch grid */}
+      {/* the 6 patch SLOTS — always shown as empty recesses so you can see there
+          are pieces to find; each is covered by its colour once that patch is found */}
+      {cells.map((c, i) => (
+        <mesh key={`slot${i}`} position={[c.x, c.y, 0.008]}>
+          <planeGeometry args={[c.w, c.h]} />
+          <meshStandardMaterial color={_slotColor} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={0.7} depthWrite={false} />
+        </mesh>
+      ))}
+      {/* the assembling patches — pop in over their slot as they're collected */}
       {cells.map((c, i) => (
         <mesh
           key={i}
           ref={(el) => (cellRefs.current[i] = el)}
-          position={[c.x, c.y, 0.012]}
+          position={[c.x, c.y, 0.016]}
           visible={false}
         >
           <planeGeometry args={[c.w, c.h]} />
