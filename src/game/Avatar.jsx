@@ -148,6 +148,60 @@ function AvatarModel({ cfg, motion }) {
       o.material = Array.isArray(o.material) ? o.material.map(soften) : soften(o.material);
     });
 
+    // Cube Woman skin recolor. Her colours are baked into one 32×32 texture atlas;
+    // the skin (face + forearms + lower legs) is the dark texel #7e260e. Recolor JUST
+    // that texel to a warm medium-brown on a canvas (no GLB edit), keeping nearest
+    // filtering for the crisp low-poly look. Everything else (hair, tunic, shorts) is
+    // untouched. The material is already a clone, and we never touch the shared map.
+    if (cfg.id === "cube_woman") {
+      const SKIN_FROM = [0x7e, 0x26, 0x0e]; // current dark-brown skin texel
+      const SKIN_TO = [0xc0, 0x88, 0x58]; // warm medium-brown
+      const TOL = 30;
+      obj.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((m) => {
+          const tex = m.map;
+          if (!tex || !tex.image) return;
+          try {
+            const img = tex.image;
+            const w = img.width || 32;
+            const h = img.height || 32;
+            const cv = document.createElement("canvas");
+            cv.width = w;
+            cv.height = h;
+            const cx = cv.getContext("2d");
+            cx.drawImage(img, 0, 0, w, h);
+            const id = cx.getImageData(0, 0, w, h);
+            const d = id.data;
+            for (let i = 0; i < d.length; i += 4) {
+              if (
+                Math.abs(d[i] - SKIN_FROM[0]) <= TOL &&
+                Math.abs(d[i + 1] - SKIN_FROM[1]) <= TOL &&
+                Math.abs(d[i + 2] - SKIN_FROM[2]) <= TOL
+              ) {
+                d[i] = SKIN_TO[0];
+                d[i + 1] = SKIN_TO[1];
+                d[i + 2] = SKIN_TO[2];
+              }
+            }
+            cx.putImageData(id, 0, 0);
+            const nt = new THREE.CanvasTexture(cv);
+            nt.flipY = tex.flipY;
+            nt.colorSpace = tex.colorSpace;
+            nt.magFilter = THREE.NearestFilter;
+            nt.minFilter = THREE.NearestFilter;
+            nt.generateMipmaps = false;
+            nt.needsUpdate = true;
+            m.map = nt;
+            m.needsUpdate = true;
+          } catch {
+            /* leave the original texture if anything fails */
+          }
+        });
+      });
+    }
+
     obj.updateWorldMatrix(true, true);
     const box = new THREE.Box3();
     const tmp = new THREE.Box3();
