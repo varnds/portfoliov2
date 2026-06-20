@@ -176,7 +176,7 @@ function AvatarModel({ cfg, motion }) {
   // it touched so we can confirm it ran. Nothing but skin is changed.
   useEffect(() => {
     if (cfg.id !== "cube_woman" || !rig.obj) return;
-    const TARGET = [212, 166, 121]; // warm light-medium brown to pull skin toward
+    const TARGET = [224, 158, 103]; // warm light-medium brown (more red/orange, less blue → warmer)
     const BLEND = 0.33; // how far each skin pixel moves toward TARGET (keeps shading)
     // ↑ a mid value: 0 = original dark brown, ~0.62 read as too fair. ~0.33 sits
     //   between them — a warm medium brown.
