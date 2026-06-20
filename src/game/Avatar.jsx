@@ -148,60 +148,6 @@ function AvatarModel({ cfg, motion }) {
       o.material = Array.isArray(o.material) ? o.material.map(soften) : soften(o.material);
     });
 
-    // Cube Woman skin recolor. Her colours are baked into one 32×32 texture atlas;
-    // the skin (face + forearms + lower legs) is the dark texel #7e260e. Recolor JUST
-    // that texel to a warm medium-brown on a canvas (no GLB edit), keeping nearest
-    // filtering for the crisp low-poly look. Everything else (hair, tunic, shorts) is
-    // untouched. The material is already a clone, and we never touch the shared map.
-    if (cfg.id === "cube_woman") {
-      const SKIN_FROM = [0x7e, 0x26, 0x0e]; // current dark-brown skin texel
-      const SKIN_TO = [0xc0, 0x88, 0x58]; // warm medium-brown
-      const TOL = 30;
-      obj.traverse((o) => {
-        if (!o.isMesh || !o.material) return;
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach((m) => {
-          const tex = m.map;
-          if (!tex || !tex.image) return;
-          try {
-            const img = tex.image;
-            const w = img.width || 32;
-            const h = img.height || 32;
-            const cv = document.createElement("canvas");
-            cv.width = w;
-            cv.height = h;
-            const cx = cv.getContext("2d");
-            cx.drawImage(img, 0, 0, w, h);
-            const id = cx.getImageData(0, 0, w, h);
-            const d = id.data;
-            for (let i = 0; i < d.length; i += 4) {
-              if (
-                Math.abs(d[i] - SKIN_FROM[0]) <= TOL &&
-                Math.abs(d[i + 1] - SKIN_FROM[1]) <= TOL &&
-                Math.abs(d[i + 2] - SKIN_FROM[2]) <= TOL
-              ) {
-                d[i] = SKIN_TO[0];
-                d[i + 1] = SKIN_TO[1];
-                d[i + 2] = SKIN_TO[2];
-              }
-            }
-            cx.putImageData(id, 0, 0);
-            const nt = new THREE.CanvasTexture(cv);
-            nt.flipY = tex.flipY;
-            nt.colorSpace = tex.colorSpace;
-            nt.magFilter = THREE.NearestFilter;
-            nt.minFilter = THREE.NearestFilter;
-            nt.generateMipmaps = false;
-            nt.needsUpdate = true;
-            m.map = nt;
-            m.needsUpdate = true;
-          } catch {
-            /* leave the original texture if anything fails */
-          }
-        });
-      });
-    }
-
     obj.updateWorldMatrix(true, true);
     const box = new THREE.Box3();
     const tmp = new THREE.Box3();
@@ -219,6 +165,85 @@ function AvatarModel({ cfg, motion }) {
     const scale = cfg.target / Math.max(size.x, size.y, size.z, 0.001);
     return { obj, scale };
   }, [scene, cfg]);
+
+  // ── Cube Woman skin recolor ──────────────────────────────────────────────────
+  // Her colours are baked into one 32×32 texture atlas, so there's no skin material
+  // to tint. We recolor her SKIN pixels on a canvas at load. Skin is detected by a
+  // colour RULE (a warm, neutral mid-brown — excludes the saturated gold tunic, the
+  // teal shorts and the near-black hair) rather than a hardcoded texel, then lightened
+  // + warmed toward a medium brown while keeping the relative shading. Runs in an
+  // effect that RETRIES until the texture image has decoded, and logs how many pixels
+  // it touched so we can confirm it ran. Nothing but skin is changed.
+  useEffect(() => {
+    if (cfg.id !== "cube_woman" || !rig.obj) return;
+    const TARGET = [212, 166, 121]; // warm light-medium brown to pull skin toward
+    const BLEND = 0.62; // how far each skin pixel moves toward TARGET (keeps shading)
+    const isSkin = (r, g, b) =>
+      r > 75 && r < 225 && r > g && g >= b && r - b > 25 && b / r > 0.38 && b / r < 0.92;
+    let tries = 0;
+    let cancelled = false;
+    const apply = () => {
+      if (cancelled) return;
+      let changed = 0;
+      let pending = false;
+      rig.obj.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((m) => {
+          if (!m || m.userData.__skinDone) return;
+          const tex = m.map;
+          if (!tex) return;
+          const img = tex.image || (tex.source && tex.source.data);
+          if (!img || !img.width) {
+            pending = true;
+            return;
+          }
+          try {
+            const w = img.width;
+            const h = img.height;
+            const cv = document.createElement("canvas");
+            cv.width = w;
+            cv.height = h;
+            const cx = cv.getContext("2d");
+            cx.drawImage(img, 0, 0, w, h);
+            const id = cx.getImageData(0, 0, w, h);
+            const d = id.data;
+            for (let i = 0; i < d.length; i += 4) {
+              const r = d[i];
+              const g = d[i + 1];
+              const b = d[i + 2];
+              if (isSkin(r, g, b)) {
+                d[i] = Math.round(r * (1 - BLEND) + TARGET[0] * BLEND);
+                d[i + 1] = Math.round(g * (1 - BLEND) + TARGET[1] * BLEND);
+                d[i + 2] = Math.round(b * (1 - BLEND) + TARGET[2] * BLEND);
+                changed++;
+              }
+            }
+            cx.putImageData(id, 0, 0);
+            const nt = new THREE.CanvasTexture(cv);
+            nt.flipY = tex.flipY;
+            nt.colorSpace = tex.colorSpace;
+            nt.magFilter = THREE.NearestFilter;
+            nt.minFilter = THREE.NearestFilter;
+            nt.generateMipmaps = false;
+            nt.needsUpdate = true;
+            m.map = nt;
+            m.needsUpdate = true;
+            m.userData.__skinDone = true;
+          } catch {
+            /* leave the original texture if anything fails */
+          }
+        });
+      });
+      // eslint-disable-next-line no-console
+      console.log("[cube skin] recolored " + changed + " px" + (pending ? " (texture still loading…)" : ""));
+      if (pending && tries++ < 12) setTimeout(apply, 90);
+    };
+    apply();
+    return () => {
+      cancelled = true;
+    };
+  }, [rig, cfg]);
 
   // Start on idle.
   useEffect(() => {
